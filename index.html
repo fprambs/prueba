@@ -1,0 +1,69 @@
+<!doctype html>
+<html lang="es">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>Simulador de Vuelo de Dron</title>
+    <link rel="icon" type="image/svg+xml" href="favicon.svg" />
+    <link rel="stylesheet" href="style.css" />
+  </head>
+  <body>
+    <canvas id="scene"></canvas>
+
+    <div id="hud">
+      <div id="hud-top-left" class="panel">
+        <div class="row"><span class="label">ALT</span><span id="hud-alt" class="value">0.0 m</span></div>
+        <div class="row"><span class="label">VEL</span><span id="hud-speed" class="value">0.0 m/s</span></div>
+        <div class="row"><span class="label">RUMBO</span><span id="hud-heading" class="value">0°</span></div>
+      </div>
+
+      <div id="hud-top-right" class="panel">
+        <div class="row"><span class="label">PUERTAS</span><span id="hud-gates" class="value">0</span></div>
+        <div class="row"><span class="label">CÁMARA</span><span id="hud-camera" class="value">Persecución</span></div>
+      </div>
+
+      <div id="throttle-wrap" class="panel">
+        <div class="throttle-label">GAS</div>
+        <div id="throttle-bar-bg">
+          <div id="throttle-bar-fill"></div>
+        </div>
+        <div id="throttle-value">0%</div>
+      </div>
+
+      <div id="crosshair"></div>
+
+      <div id="hud-bottom" class="panel">
+        <b>Controles</b> —
+        W/S: Gas &nbsp;|&nbsp; ↑/↓: Cabeceo &nbsp;|&nbsp; ←/→: Alabeo &nbsp;|&nbsp; A/D: Guiñada &nbsp;|&nbsp;
+        Shift: Impulso &nbsp;|&nbsp; C: Cámara &nbsp;|&nbsp; R: Reiniciar &nbsp;|&nbsp; Espacio: Estabilizar
+      </div>
+
+      <div id="start-screen">
+        <div id="start-box">
+          <h1>🛸 Simulador de Vuelo de Dron</h1>
+          <p>Vuela un cuadricóptero, atraviesa los aros amarillos y explora el mapa.</p>
+          <ul>
+            <li><b>W / S</b> — Subir / bajar gas (empuje vertical)</li>
+            <li><b>↑ / ↓</b> — Inclinar adelante / atrás (cabeceo)</li>
+            <li><b>← / →</b> — Inclinar izquierda / derecha (alabeo)</li>
+            <li><b>A / D</b> — Girar sobre su eje (guiñada)</li>
+            <li><b>Shift</b> — Impulso extra</li>
+            <li><b>Espacio</b> — Autoestabilizar (nivelar)</li>
+            <li><b>C</b> — Cambiar cámara (persecución / FPV / orbital)</li>
+            <li><b>R</b> — Reiniciar posición</li>
+          </ul>
+          <button id="start-btn">Despegar 🚀</button>
+        </div>
+      </div>
+    </div>
+
+    <script type="importmap">
+      {
+        "imports": {
+          "three": "./vendor/three.module.min.js"
+        }
+      }
+    </script>
+    <script type="module" src="main.js"></script>
+  </body>
+</html>
