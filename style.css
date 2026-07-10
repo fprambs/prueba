@@ -150,6 +150,102 @@ html, body {
   white-space: nowrap;
 }
 
+/* ---------------------------------------------------------------------
+   Touch controls (virtual joysticks + buttons) — hidden by default,
+   shown by main.js when it detects a touch-capable device.
+   --------------------------------------------------------------------- */
+
+#touch-controls {
+  display: none;
+}
+
+body.touch-device #touch-controls {
+  display: block;
+}
+
+body.touch-device #hud-bottom {
+  display: none;
+}
+
+body.touch-device #throttle-wrap {
+  bottom: calc(190px + env(safe-area-inset-bottom, 0px));
+}
+
+.joystick {
+  position: absolute;
+  bottom: calc(24px + env(safe-area-inset-bottom, 0px));
+  width: 130px;
+  height: 130px;
+  border-radius: 50%;
+  background: rgba(6, 14, 22, 0.45);
+  border: 2px solid rgba(90, 230, 255, 0.4);
+  pointer-events: all;
+  touch-action: none;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+
+#joystick-left {
+  left: 24px;
+}
+
+#joystick-right {
+  right: 24px;
+}
+
+.joystick-knob {
+  width: 56px;
+  height: 56px;
+  border-radius: 50%;
+  background: linear-gradient(135deg, #7fffcf, #33d1ff);
+  box-shadow: 0 0 14px rgba(51, 209, 255, 0.6);
+  pointer-events: none;
+  will-change: transform;
+}
+
+.joystick-hint {
+  position: absolute;
+  bottom: -22px;
+  left: 50%;
+  transform: translateX(-50%);
+  font-size: 9px;
+  letter-spacing: 0.5px;
+  color: rgba(234, 252, 255, 0.6);
+  white-space: nowrap;
+  pointer-events: none;
+}
+
+#touch-buttons {
+  position: absolute;
+  right: 24px;
+  bottom: calc(180px + env(safe-area-inset-bottom, 0px));
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+  pointer-events: all;
+}
+
+.touch-btn {
+  width: 46px;
+  height: 46px;
+  border-radius: 50%;
+  background: rgba(6, 14, 22, 0.55);
+  border: 1px solid rgba(90, 230, 255, 0.4);
+  color: #eafcff;
+  font-size: 18px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  touch-action: none;
+  padding: 0;
+}
+
+.touch-btn:active,
+.touch-btn.active {
+  background: rgba(51, 209, 255, 0.35);
+}
+
 #start-screen {
   position: fixed;
   inset: 0;
@@ -163,6 +259,8 @@ html, body {
 
 #start-box {
   max-width: 480px;
+  max-height: 92vh;
+  overflow-y: auto;
   background: rgba(8, 18, 28, 0.9);
   border: 1px solid rgba(90, 230, 255, 0.4);
   border-radius: 16px;

@@ -1,4 +1,4 @@
-import * as THREE from "three";
+// Three.js is loaded globally via vendor/three.min.js (see index.html).
 
 // ---------------------------------------------------------------------------
 // Setup
@@ -240,6 +240,110 @@ function cycleCamera() {
   document.getElementById("hud-camera").textContent = cameraModes[cameraMode];
 }
 
+// Touch controls: virtual joysticks (left = throttle/yaw, right = pitch/roll)
+// plus buttons for camera, auto-level, boost and reset. Shown automatically
+// on touch-capable devices (see isTouchDevice below).
+const isTouchDevice = "ontouchstart" in window || navigator.maxTouchPoints > 0;
+if (isTouchDevice) {
+  document.body.classList.add("touch-device");
+  document.getElementById("start-keyboard-list").classList.add("hidden");
+  document.getElementById("start-touch-list").classList.remove("hidden");
+}
+
+const touch = { throttle: 0, yaw: 0, pitch: 0, roll: 0, boost: false, level: false };
+
+function setupJoystick(baseEl, knobEl, onChange) {
+  const jState = { active: false, pointerId: null };
+
+  function setKnob(x, y) {
+    knobEl.style.transform = `translate(${x}px, ${y}px)`;
+  }
+
+  function handleMove(clientX, clientY) {
+    const rect = baseEl.getBoundingClientRect();
+    const cx = rect.left + rect.width / 2;
+    const cy = rect.top + rect.height / 2;
+    const r = rect.width / 2;
+    let dx = clientX - cx;
+    let dy = clientY - cy;
+    const dist = Math.hypot(dx, dy);
+    if (dist > r) {
+      dx = (dx / dist) * r;
+      dy = (dy / dist) * r;
+    }
+    setKnob(dx, dy);
+    onChange(dx / r, -dy / r); // invert Y so "up" is positive
+  }
+
+  function reset() {
+    jState.active = false;
+    jState.pointerId = null;
+    setKnob(0, 0);
+    onChange(0, 0);
+  }
+
+  baseEl.addEventListener("pointerdown", (e) => {
+    jState.active = true;
+    jState.pointerId = e.pointerId;
+    baseEl.setPointerCapture(e.pointerId);
+    handleMove(e.clientX, e.clientY);
+  });
+  baseEl.addEventListener("pointermove", (e) => {
+    if (!jState.active || e.pointerId !== jState.pointerId) return;
+    handleMove(e.clientX, e.clientY);
+  });
+  const onUp = (e) => {
+    if (e.pointerId !== jState.pointerId) return;
+    reset();
+  };
+  baseEl.addEventListener("pointerup", onUp);
+  baseEl.addEventListener("pointercancel", onUp);
+}
+
+setupJoystick(document.getElementById("joystick-left"), document.querySelector("#joystick-left .joystick-knob"), (x, y) => {
+  touch.yaw = -x;
+  touch.throttle = y;
+});
+setupJoystick(document.getElementById("joystick-right"), document.querySelector("#joystick-right .joystick-knob"), (x, y) => {
+  touch.roll = -x;
+  touch.pitch = y;
+});
+
+function bindHoldButton(id, onDown, onUp) {
+  const el = document.getElementById(id);
+  el.addEventListener("pointerdown", (e) => {
+    e.preventDefault();
+    el.classList.add("active");
+    onDown();
+  });
+  const release = () => {
+    el.classList.remove("active");
+    onUp();
+  };
+  el.addEventListener("pointerup", release);
+  el.addEventListener("pointercancel", release);
+  el.addEventListener("pointerleave", release);
+}
+
+bindHoldButton(
+  "btn-boost",
+  () => (touch.boost = true),
+  () => (touch.boost = false)
+);
+bindHoldButton(
+  "btn-level",
+  () => (touch.level = true),
+  () => (touch.level = false)
+);
+document.getElementById("btn-camera").addEventListener("pointerdown", (e) => {
+  e.preventDefault();
+  if (started) cycleCamera();
+});
+document.getElementById("btn-reset").addEventListener("pointerdown", (e) => {
+  e.preventDefault();
+  if (started) resetDrone();
+});
+
 document.getElementById("start-btn").addEventListener("click", () => {
   document.getElementById("start-screen").classList.add("hidden");
   started = true;
@@ -288,26 +392,43 @@ function updatePhysics(dt) {
   if (dt <= 0) return;
   dt = Math.min(dt, 0.05);
 
-  const boost = keys.has("ShiftLeft") || keys.has("ShiftRight") ? 1.4 : 1.0;
+  const boost = keys.has("ShiftLeft") || keys.has("ShiftRight") || touch.boost ? 1.4 : 1.0;
+  const levelHold = keys.has("Space") || touch.level;
 
-  // Throttle (W/S)
+  // Combine keyboard (digital) and touch joystick (analog) input into single
+  // -1..1 stick values so both control schemes share the same flight code.
+  const throttleInput = THREE.MathUtils.clamp(
+    (keys.has("KeyW") ? 1 : 0) - (keys.has("KeyS") ? 1 : 0) + touch.throttle,
+    -1,
+    1
+  );
+  const pitchInput = THREE.MathUtils.clamp(
+    (keys.has("ArrowUp") ? 1 : 0) - (keys.has("ArrowDown") ? 1 : 0) + touch.pitch,
+    -1,
+    1
+  );
+  const rollInput = THREE.MathUtils.clamp(
+    (keys.has("ArrowLeft") ? 1 : 0) - (keys.has("ArrowRight") ? 1 : 0) + touch.roll,
+    -1,
+    1
+  );
+  const yawInput = THREE.MathUtils.clamp(
+    (keys.has("KeyA") ? 1 : 0) - (keys.has("KeyD") ? 1 : 0) + touch.yaw,
+    -1,
+    1
+  );
+
+  // Throttle
   const throttleRate = 0.6; // per second
-  if (keys.has("KeyW")) state.throttle += throttleRate * dt;
-  if (keys.has("KeyS")) state.throttle -= throttleRate * dt;
+  state.throttle += throttleInput * throttleRate * dt;
   state.throttle = THREE.MathUtils.clamp(state.throttle, 0, 1);
 
   // Desired body rates from input
-  let targetPitch = 0;
-  let targetRoll = 0;
-  let targetYaw = 0;
-  if (keys.has("ArrowUp")) targetPitch = MAX_RATE;
-  if (keys.has("ArrowDown")) targetPitch = -MAX_RATE;
-  if (keys.has("ArrowRight")) targetRoll = -MAX_RATE;
-  if (keys.has("ArrowLeft")) targetRoll = MAX_RATE;
-  if (keys.has("KeyD")) targetYaw = -MAX_RATE * 0.6;
-  if (keys.has("KeyA")) targetYaw = MAX_RATE * 0.6;
+  let targetPitch = pitchInput * MAX_RATE;
+  let targetRoll = rollInput * MAX_RATE;
+  let targetYaw = yawInput * MAX_RATE * 0.6;
 
-  if (keys.has("Space")) {
+  if (levelHold) {
     // Auto-level: bleed off pitch/roll rates and let stabilization pull us flat.
     targetPitch = 0;
     targetRoll = 0;
@@ -319,8 +440,8 @@ function updatePhysics(dt) {
   state.angVel.roll += (targetRoll - state.angVel.roll) * respo;
   state.angVel.yaw += (targetYaw - state.angVel.yaw) * respo;
 
-  // Extra self-leveling torque toward flat orientation when SPACE is held.
-  if (keys.has("Space")) {
+  // Extra self-leveling torque toward flat orientation when level-hold is active.
+  if (levelHold) {
     _euler.setFromQuaternion(state.quaternion, "YXZ");
     state.angVel.pitch += -_euler.x * 4 * dt;
     state.angVel.roll += -_euler.z * 4 * dt;

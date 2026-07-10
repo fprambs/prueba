@@ -2,7 +2,7 @@
 <html lang="es">
   <head>
     <meta charset="UTF-8" />
-    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no, viewport-fit=cover" />
     <title>Simulador de Vuelo de Dron</title>
     <link rel="icon" type="image/svg+xml" href="favicon.svg" />
     <link rel="stylesheet" href="style.css" />
@@ -38,11 +38,29 @@
         Shift: Impulso &nbsp;|&nbsp; C: Cámara &nbsp;|&nbsp; R: Reiniciar &nbsp;|&nbsp; Espacio: Estabilizar
       </div>
 
+      <!-- Touch controls: shown only on touch devices (see main.js) -->
+      <div id="touch-controls">
+        <div id="joystick-left" class="joystick">
+          <div class="joystick-knob"></div>
+          <div class="joystick-hint">GAS / GUIÑADA</div>
+        </div>
+        <div id="joystick-right" class="joystick">
+          <div class="joystick-knob"></div>
+          <div class="joystick-hint">CABECEO / ALABEO</div>
+        </div>
+        <div id="touch-buttons">
+          <button id="btn-camera" class="touch-btn" type="button">📷</button>
+          <button id="btn-level" class="touch-btn" type="button">⚖️</button>
+          <button id="btn-boost" class="touch-btn" type="button">⚡</button>
+          <button id="btn-reset" class="touch-btn" type="button">⟲</button>
+        </div>
+      </div>
+
       <div id="start-screen">
         <div id="start-box">
           <h1>🛸 Simulador de Vuelo de Dron</h1>
           <p>Vuela un cuadricóptero, atraviesa los aros amarillos y explora el mapa.</p>
-          <ul>
+          <ul id="start-keyboard-list">
             <li><b>W / S</b> — Subir / bajar gas (empuje vertical)</li>
             <li><b>↑ / ↓</b> — Inclinar adelante / atrás (cabeceo)</li>
             <li><b>← / →</b> — Inclinar izquierda / derecha (alabeo)</li>
@@ -52,18 +70,19 @@
             <li><b>C</b> — Cambiar cámara (persecución / FPV / orbital)</li>
             <li><b>R</b> — Reiniciar posición</li>
           </ul>
+          <ul id="start-touch-list" class="hidden">
+            <li><b>Joystick ⬅️</b> — Arriba/abajo: gas · Izq/der: guiñada</li>
+            <li><b>Joystick ➡️</b> — Arriba/abajo: cabeceo · Izq/der: alabeo</li>
+            <li><b>⚖️</b> — Mantén pulsado para autoestabilizar</li>
+            <li><b>⚡</b> — Mantén pulsado para impulso extra</li>
+            <li><b>📷</b> — Cambiar cámara &nbsp; <b>⟲</b> — Reiniciar</li>
+          </ul>
           <button id="start-btn">Despegar 🚀</button>
         </div>
       </div>
     </div>
 
-    <script type="importmap">
-      {
-        "imports": {
-          "three": "./vendor/three.module.min.js"
-        }
-      }
-    </script>
-    <script type="module" src="main.js"></script>
+    <script src="vendor/three.min.js"></script>
+    <script src="main.js"></script>
   </body>
 </html>
