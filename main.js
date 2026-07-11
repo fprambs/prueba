@@ -153,68 +153,127 @@ for (let i = 0; i < GATE_COUNT; i++) {
 let gatesPassed = 0;
 
 // ---------------------------------------------------------------------------
-// Drone model
+// Drone models — a few selectable presets, each with its own look and
+// flight feel (top speed, agility, stability).
 // ---------------------------------------------------------------------------
 
-const drone = new THREE.Group();
+const DRONE_TYPES = {
+  explorer: {
+    label: "Explorador",
+    emoji: "🛸",
+    description: "Equilibrado y estable",
+    bodyColor: 0x222831,
+    armColor: 0x3d4756,
+    accentColor: 0x33d1ff,
+    scale: 1.0,
+    maxTiltDeg: 26,
+    maxYawRate: 2.0,
+    maxThrustAccel: 22,
+    linearDrag: 0.55,
+    rateResponse: 7.0,
+  },
+  racer: {
+    label: "Carreras",
+    emoji: "🏁",
+    description: "Ágil y muy veloz",
+    bodyColor: 0x3a0d10,
+    armColor: 0x611414,
+    accentColor: 0xff4433,
+    scale: 0.85,
+    maxTiltDeg: 40,
+    maxYawRate: 3.2,
+    maxThrustAccel: 30,
+    linearDrag: 0.42,
+    rateResponse: 10.0,
+  },
+  cinema: {
+    label: "Cinemático",
+    emoji: "🎥",
+    description: "Suave y muy estable",
+    bodyColor: 0xe6e8ea,
+    armColor: 0xc7cbd1,
+    accentColor: 0xffd166,
+    scale: 1.3,
+    maxTiltDeg: 16,
+    maxYawRate: 1.2,
+    maxThrustAccel: 17,
+    linearDrag: 0.7,
+    rateResponse: 5.0,
+  },
+};
 
-const bodyMat = new THREE.MeshStandardMaterial({ color: 0x222831, roughness: 0.4, metalness: 0.4 });
-const armMat = new THREE.MeshStandardMaterial({ color: 0x3d4756, roughness: 0.5, metalness: 0.3 });
-const propMat = new THREE.MeshStandardMaterial({ color: 0x111318, roughness: 0.3, metalness: 0.2 });
-const ledMat = new THREE.MeshStandardMaterial({ color: 0xff3355, emissive: 0xff2244, emissiveIntensity: 1.5 });
-const ledFrontMat = new THREE.MeshStandardMaterial({ color: 0x33ff77, emissive: 0x22ff55, emissiveIntensity: 1.5 });
+function buildDrone(config) {
+  const group = new THREE.Group();
 
-const body = new THREE.Mesh(new THREE.BoxGeometry(0.9, 0.28, 1.1), bodyMat);
-body.castShadow = true;
-drone.add(body);
+  const bodyMat = new THREE.MeshStandardMaterial({ color: config.bodyColor, roughness: 0.4, metalness: 0.4 });
+  const armMat = new THREE.MeshStandardMaterial({ color: config.armColor, roughness: 0.5, metalness: 0.3 });
+  const propMat = new THREE.MeshStandardMaterial({ color: 0x111318, roughness: 0.3, metalness: 0.2 });
+  const ledMat = new THREE.MeshStandardMaterial({ color: 0xff3355, emissive: 0xff2244, emissiveIntensity: 1.5 });
+  const ledFrontMat = new THREE.MeshStandardMaterial({
+    color: config.accentColor,
+    emissive: config.accentColor,
+    emissiveIntensity: 1.2,
+  });
 
-const dome = new THREE.Mesh(new THREE.SphereGeometry(0.28, 12, 8), bodyMat);
-dome.position.set(0, 0.16, 0.35);
-drone.add(dome);
+  const body = new THREE.Mesh(new THREE.BoxGeometry(0.9, 0.28, 1.1), bodyMat);
+  body.castShadow = true;
+  group.add(body);
 
-const armOffsets = [
-  { x: 0.7, z: 0.7, front: true },
-  { x: -0.7, z: 0.7, front: true },
-  { x: 0.7, z: -0.7, front: false },
-  { x: -0.7, z: -0.7, front: false },
-];
+  const dome = new THREE.Mesh(new THREE.SphereGeometry(0.28, 12, 8), bodyMat);
+  dome.position.set(0, 0.16, 0.35);
+  group.add(dome);
 
-const propellers = [];
+  const armOffsets = [
+    { x: 0.7, z: 0.7, front: true },
+    { x: -0.7, z: 0.7, front: true },
+    { x: 0.7, z: -0.7, front: false },
+    { x: -0.7, z: -0.7, front: false },
+  ];
 
-armOffsets.forEach(({ x, z, front }) => {
-  const armLen = Math.hypot(x, z);
-  const arm = new THREE.Mesh(new THREE.BoxGeometry(0.12, 0.08, armLen), armMat);
-  arm.position.set(x / 2, 0, z / 2);
-  arm.rotation.y = Math.atan2(x, z);
-  arm.castShadow = true;
-  drone.add(arm);
+  const propellers = [];
 
-  const motor = new THREE.Mesh(new THREE.CylinderGeometry(0.12, 0.14, 0.18, 10), bodyMat);
-  motor.position.set(x, 0.05, z);
-  drone.add(motor);
+  armOffsets.forEach(({ x, z, front }) => {
+    const armLen = Math.hypot(x, z);
+    const arm = new THREE.Mesh(new THREE.BoxGeometry(0.12, 0.08, armLen), armMat);
+    arm.position.set(x / 2, 0, z / 2);
+    arm.rotation.y = Math.atan2(x, z);
+    arm.castShadow = true;
+    group.add(arm);
 
-  const led = new THREE.Mesh(new THREE.SphereGeometry(0.05, 6, 6), front ? ledFrontMat : ledMat);
-  led.position.set(x, 0.05, z + (front ? 0.12 : -0.12));
-  drone.add(led);
+    const motor = new THREE.Mesh(new THREE.CylinderGeometry(0.12, 0.14, 0.18, 10), bodyMat);
+    motor.position.set(x, 0.05, z);
+    group.add(motor);
 
-  const propGroup = new THREE.Group();
-  propGroup.position.set(x, 0.15, z);
-  const blade = new THREE.Mesh(new THREE.BoxGeometry(0.9, 0.02, 0.08), propMat);
-  blade.castShadow = true;
-  const blade2 = blade.clone();
-  blade2.rotation.y = Math.PI / 2;
-  propGroup.add(blade, blade2);
-  drone.add(propGroup);
-  propellers.push(propGroup);
-});
+    const led = new THREE.Mesh(new THREE.SphereGeometry(0.05, 6, 6), front ? ledFrontMat : ledMat);
+    led.position.set(x, 0.05, z + (front ? 0.12 : -0.12));
+    group.add(led);
 
+    const propGroup = new THREE.Group();
+    propGroup.position.set(x, 0.15, z);
+    const blade = new THREE.Mesh(new THREE.BoxGeometry(0.9, 0.02, 0.08), propMat);
+    blade.castShadow = true;
+    const blade2 = blade.clone();
+    blade2.rotation.y = Math.PI / 2;
+    propGroup.add(blade, blade2);
+    group.add(propGroup);
+    propellers.push(propGroup);
+  });
+
+  group.scale.setScalar(config.scale);
+
+  // A tiny light attached to the drone so it's visible at night / in shadow.
+  const droneLight = new THREE.PointLight(config.accentColor, 0.6, 8);
+  droneLight.position.set(0, 0.3, 0);
+  group.add(droneLight);
+
+  return { group, propellers };
+}
+
+let selectedDroneKey = "explorer";
+let droneConfig = DRONE_TYPES[selectedDroneKey];
+let { group: drone, propellers } = buildDrone(droneConfig);
 drone.position.set(0, 6, 0);
 scene.add(drone);
-
-// A tiny light attached to the drone so it's visible at night / in shadow.
-const droneLight = new THREE.PointLight(0xffffff, 0.6, 8);
-droneLight.position.set(0, 0.3, 0);
-drone.add(droneLight);
 
 // ---------------------------------------------------------------------------
 // Input handling
@@ -344,6 +403,19 @@ document.getElementById("btn-reset").addEventListener("pointerdown", (e) => {
   if (started) resetDrone();
 });
 
+// Drone picker on the start screen — pick a model, see it swap live in the
+// preview behind the menu, then take off with whichever was last selected.
+const droneOptionEls = document.querySelectorAll(".drone-option");
+droneOptionEls.forEach((el) => {
+  el.addEventListener("click", () => {
+    droneOptionEls.forEach((o) => o.classList.remove("selected"));
+    el.classList.add("selected");
+    selectedDroneKey = el.dataset.drone;
+    droneConfig = DRONE_TYPES[selectedDroneKey];
+    applyDroneType();
+  });
+});
+
 document.getElementById("start-btn").addEventListener("click", () => {
   document.getElementById("start-screen").classList.add("hidden");
   started = true;
@@ -357,36 +429,55 @@ document.getElementById("start-btn").addEventListener("click", () => {
 const state = {
   position: new THREE.Vector3(0, 6, 0),
   velocity: new THREE.Vector3(0, 0, 0),
+  yaw: 0, // heading, radians — free rotation, like turning a car
+  pitch: 0, // nose up/down lean, radians — bounded, like a real drone
+  roll: 0, // bank left/right lean, radians — bounded, like a real drone
+  yawRate: 0, // current yaw angular velocity, for smoothing
   quaternion: new THREE.Quaternion(),
-  angVel: { pitch: 0, roll: 0, yaw: 0 }, // local rad/s
-  throttle: 0.55, // 0..1, 0.5 roughly hovers
+  throttle: 0.55, // 0..1, ~0.5 roughly hovers
 };
 
 const DRONE_RADIUS = 0.75;
 const GRAVITY = 9.81;
-const MAX_THRUST_ACCEL = 22; // m/s^2 at full throttle
-const LINEAR_DRAG = 0.55;
-const ANGULAR_DAMPING = 6.0;
-const MAX_RATE = 2.6; // rad/s max pitch/roll/yaw rate
-const RATE_RESPONSE = 7.0; // how fast rates track input
+
+// Per-drone flight tuning, applied by applyDroneType() from DRONE_TYPES.
+let MAX_TILT = THREE.MathUtils.degToRad(droneConfig.maxTiltDeg); // max lean angle
+let MAX_YAW_RATE = droneConfig.maxYawRate; // rad/s
+let MAX_THRUST_ACCEL = droneConfig.maxThrustAccel; // m/s^2 at full throttle
+let LINEAR_DRAG = droneConfig.linearDrag;
+let RATE_RESPONSE = droneConfig.rateResponse; // how fast pitch/roll/yaw track input
+
+function applyDroneType() {
+  scene.remove(drone);
+  const built = buildDrone(droneConfig);
+  drone = built.group;
+  propellers = built.propellers;
+  drone.position.copy(state.position);
+  drone.quaternion.copy(state.quaternion);
+  scene.add(drone);
+
+  MAX_TILT = THREE.MathUtils.degToRad(droneConfig.maxTiltDeg);
+  MAX_YAW_RATE = droneConfig.maxYawRate;
+  MAX_THRUST_ACCEL = droneConfig.maxThrustAccel;
+  LINEAR_DRAG = droneConfig.linearDrag;
+  RATE_RESPONSE = droneConfig.rateResponse;
+}
 
 function resetDrone() {
   state.position.set(0, 6, 0);
   state.velocity.set(0, 0, 0);
+  state.yaw = 0;
+  state.pitch = 0;
+  state.roll = 0;
+  state.yawRate = 0;
   state.quaternion.identity();
-  state.angVel.pitch = 0;
-  state.angVel.roll = 0;
-  state.angVel.yaw = 0;
   state.throttle = 0.55;
 }
 
 const _fwd = new THREE.Vector3();
 const _up = new THREE.Vector3();
-const _right = new THREE.Vector3();
 const _thrust = new THREE.Vector3();
 const _dragForce = new THREE.Vector3();
-const _deltaQuat = new THREE.Quaternion();
-const _euler = new THREE.Euler();
 
 function updatePhysics(dt) {
   if (dt <= 0) return;
@@ -423,38 +514,34 @@ function updatePhysics(dt) {
   state.throttle += throttleInput * throttleRate * dt;
   state.throttle = THREE.MathUtils.clamp(state.throttle, 0, 1);
 
-  // Desired body rates from input
-  let targetPitch = pitchInput * MAX_RATE;
-  let targetRoll = rollInput * MAX_RATE;
-  let targetYaw = yawInput * MAX_RATE * 0.6;
-
+  // Angle-mode flight controller: stick deflection maps to a *target lean
+  // angle* (clamped to MAX_TILT), not a rotation rate — the same "angle
+  // mode" a real consumer drone flies in. Centering the stick always
+  // returns the drone to level, and it can never flip or tumble.
+  let targetPitch = pitchInput * MAX_TILT;
+  let targetRoll = rollInput * MAX_TILT;
   if (levelHold) {
-    // Auto-level: bleed off pitch/roll rates and let stabilization pull us flat.
     targetPitch = 0;
     targetRoll = 0;
   }
 
-  // Smoothly chase the target rates (simulates flight-controller response).
   const respo = 1 - Math.exp(-RATE_RESPONSE * dt);
-  state.angVel.pitch += (targetPitch - state.angVel.pitch) * respo;
-  state.angVel.roll += (targetRoll - state.angVel.roll) * respo;
-  state.angVel.yaw += (targetYaw - state.angVel.yaw) * respo;
+  state.pitch += (targetPitch - state.pitch) * respo;
+  state.roll += (targetRoll - state.roll) * respo;
+  state.pitch = THREE.MathUtils.clamp(state.pitch, -MAX_TILT, MAX_TILT);
+  state.roll = THREE.MathUtils.clamp(state.roll, -MAX_TILT, MAX_TILT);
 
-  // Extra self-leveling torque toward flat orientation when level-hold is active.
-  if (levelHold) {
-    _euler.setFromQuaternion(state.quaternion, "YXZ");
-    state.angVel.pitch += -_euler.x * 4 * dt;
-    state.angVel.roll += -_euler.z * 4 * dt;
-  }
+  // Yaw (turning left/right) is a free heading rotation — unlike pitch/roll
+  // it isn't bounded, since spinning around its own vertical axis is normal.
+  const targetYawRate = yawInput * MAX_YAW_RATE;
+  state.yawRate += (targetYawRate - state.yawRate) * respo;
+  state.yaw += state.yawRate * dt;
 
-  // Integrate orientation using local angular velocity (pitch=X, yaw=Y, roll=Z).
-  _deltaQuat.setFromEuler(
-    new THREE.Euler(state.angVel.pitch * dt, state.angVel.yaw * dt, state.angVel.roll * dt, "YXZ")
-  );
-  state.quaternion.multiply(_deltaQuat);
-  state.quaternion.normalize();
+  state.quaternion.setFromEuler(new THREE.Euler(state.pitch, state.yaw, state.roll, "YXZ"));
 
-  // Thrust along the drone's local up axis.
+  // Thrust along the drone's local up axis — tilting it forward/sideways
+  // (within MAX_TILT) diverts part of that thrust into horizontal motion,
+  // so climbing while pitched forward naturally climbs *and* moves forward.
   _up.set(0, 1, 0).applyQuaternion(state.quaternion);
   const thrustAccel = MAX_THRUST_ACCEL * state.throttle * boost;
   _thrust.copy(_up).multiplyScalar(thrustAccel);
@@ -469,10 +556,6 @@ function updatePhysics(dt) {
   state.velocity.y += (_thrust.y + gravityAccel + _dragForce.y) * dt;
   state.velocity.z += (_thrust.z + _dragForce.z) * dt;
 
-  // Angular damping keeps things from spinning forever once input stops.
-  state.angVel.pitch *= 1 - Math.min(1, ANGULAR_DAMPING * dt * 0.15);
-  state.angVel.roll *= 1 - Math.min(1, ANGULAR_DAMPING * dt * 0.15);
-
   state.position.addScaledVector(state.velocity, dt);
 
   // Ground collision
@@ -481,8 +564,6 @@ function updatePhysics(dt) {
     state.velocity.y = Math.max(0, -state.velocity.y * 0.15);
     state.velocity.x *= 0.9;
     state.velocity.z *= 0.9;
-    state.angVel.pitch *= 0.5;
-    state.angVel.roll *= 0.5;
   }
 
   // World bounds — soft wall to keep the player near the play area.

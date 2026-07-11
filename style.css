@@ -296,6 +296,61 @@ body.touch-device #throttle-wrap {
   min-width: 90px;
 }
 
+#drone-picker {
+  margin-bottom: 20px;
+}
+
+.drone-picker-label {
+  font-size: 11px;
+  letter-spacing: 1px;
+  color: #7fd8e8;
+  font-weight: 700;
+  margin-bottom: 8px;
+  text-align: center;
+}
+
+#drone-options {
+  display: flex;
+  gap: 8px;
+}
+
+.drone-option {
+  flex: 1;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 2px;
+  padding: 10px 6px;
+  background: rgba(255, 255, 255, 0.05);
+  border: 1px solid rgba(90, 230, 255, 0.25);
+  border-radius: 10px;
+  color: #eafcff;
+  font-family: inherit;
+  cursor: pointer;
+  transition: background 0.15s ease, border-color 0.15s ease;
+}
+
+.drone-option-emoji {
+  font-size: 22px;
+}
+
+.drone-option-name {
+  font-size: 12px;
+  font-weight: 700;
+}
+
+.drone-option-desc {
+  font-size: 10px;
+  color: rgba(234, 252, 255, 0.65);
+  text-align: center;
+}
+
+.drone-option.selected {
+  background: rgba(51, 209, 255, 0.18);
+  border-color: #33d1ff;
+  box-shadow: 0 0 12px rgba(51, 209, 255, 0.35);
+}
+
 #start-btn {
   display: block;
   width: 100%;
