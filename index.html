@@ -98,8 +98,105 @@
             </div>
           </div>
 
+          <button id="tutorial-btn" type="button">🎮 Cómo se controla</button>
           <button id="start-btn">Despegar 🚀</button>
         </div>
+      </div>
+
+      <!-- DJI Mode-2 stick tutorial — opens over the start screen, doesn't touch `started`. -->
+      <div id="tutorial-screen" class="hidden">
+        <div id="tutorial-box">
+          <button id="tutorial-close" type="button" aria-label="Cerrar">✕</button>
+          <h2>Cómo funcionan los sticks (Modo 2)</h2>
+
+          <div id="tutorial-stage">
+            <svg id="remote-illustration" viewBox="0 0 340 200" role="img" aria-label="Control remoto con dos sticks">
+              <rect x="10" y="15" width="320" height="170" rx="26" class="remote-body" />
+              <rect x="42" y="0" width="7" height="34" rx="3.5" class="remote-antenna" />
+              <rect x="291" y="0" width="7" height="34" rx="3.5" class="remote-antenna" />
+              <circle cx="45.5" cy="0" r="6" class="remote-antenna-tip" />
+              <circle cx="294.5" cy="0" r="6" class="remote-antenna-tip" />
+              <rect x="140" y="30" width="60" height="14" rx="7" class="remote-screen" />
+
+              <!-- Left stick: Gas (vertical) / Guiñada (horizontal) -->
+              <g id="stick-left" class="stick-group" data-stick="left">
+                <circle cx="95" cy="110" r="42" class="stick-housing" />
+                <circle cx="95" cy="110" r="24" class="stick-cap" id="cap-left" />
+              </g>
+
+              <!-- Right stick: Cabeceo (vertical) / Alabeo (horizontal) -->
+              <g id="stick-right" class="stick-group" data-stick="right">
+                <circle cx="245" cy="110" r="42" class="stick-housing" />
+                <circle cx="245" cy="110" r="24" class="stick-cap" id="cap-right" />
+              </g>
+
+              <!-- Directional hotspots: 4 per stick, tap to trigger that movement's demo. -->
+              <g class="arrow-btn" data-stick="left" data-dir="up" data-key="throttle_up">
+                <circle cx="95" cy="42" r="17" class="arrow-hit" />
+                <path d="M95,32 L86,48 L104,48 Z" class="arrow-glyph" />
+              </g>
+              <g class="arrow-btn" data-stick="left" data-dir="down" data-key="throttle_down">
+                <circle cx="95" cy="178" r="17" class="arrow-hit" />
+                <path d="M95,188 L86,172 L104,172 Z" class="arrow-glyph" />
+              </g>
+              <g class="arrow-btn" data-stick="left" data-dir="left" data-key="yaw_left">
+                <circle cx="25" cy="110" r="17" class="arrow-hit" />
+                <path d="M15,110 L31,101 L31,119 Z" class="arrow-glyph" />
+              </g>
+              <g class="arrow-btn" data-stick="left" data-dir="right" data-key="yaw_right">
+                <circle cx="165" cy="110" r="17" class="arrow-hit" />
+                <path d="M175,110 L159,101 L159,119 Z" class="arrow-glyph" />
+              </g>
+
+              <g class="arrow-btn" data-stick="right" data-dir="up" data-key="pitch_up">
+                <circle cx="245" cy="42" r="17" class="arrow-hit" />
+                <path d="M245,32 L236,48 L254,48 Z" class="arrow-glyph" />
+              </g>
+              <g class="arrow-btn" data-stick="right" data-dir="down" data-key="pitch_down">
+                <circle cx="245" cy="178" r="17" class="arrow-hit" />
+                <path d="M245,188 L236,172 L254,172 Z" class="arrow-glyph" />
+              </g>
+              <g class="arrow-btn" data-stick="right" data-dir="left" data-key="roll_left">
+                <circle cx="175" cy="110" r="17" class="arrow-hit" />
+                <path d="M165,110 L181,101 L181,119 Z" class="arrow-glyph" />
+              </g>
+              <g class="arrow-btn" data-stick="right" data-dir="right" data-key="roll_right">
+                <circle cx="315" cy="110" r="17" class="arrow-hit" />
+                <path d="M325,110 L309,101 L309,119 Z" class="arrow-glyph" />
+              </g>
+            </svg>
+
+            <div id="tutorial-drone-panel">
+              <svg id="drone-topdown" viewBox="0 0 200 200" role="img" aria-label="Vista superior del dron">
+                <g id="drone-topdown-group">
+                  <line x1="100" y1="100" x2="62" y2="62" class="td-arm" />
+                  <line x1="100" y1="100" x2="138" y2="62" class="td-arm" />
+                  <line x1="100" y1="100" x2="62" y2="138" class="td-arm" />
+                  <line x1="100" y1="100" x2="138" y2="138" class="td-arm" />
+                  <circle cx="62" cy="62" r="15" class="td-motor td-motor-front" />
+                  <circle cx="138" cy="62" r="15" class="td-motor td-motor-front" />
+                  <circle cx="62" cy="138" r="15" class="td-motor" />
+                  <circle cx="138" cy="138" r="15" class="td-motor" />
+                  <rect x="78" y="82" width="44" height="36" rx="9" class="td-body" />
+                  <path d="M100,68 L90,84 L110,84 Z" class="td-nose" />
+                </g>
+              </svg>
+              <div id="tutorial-move-name">Gas</div>
+              <div id="tutorial-move-desc">Toca una flecha para empezar.</div>
+            </div>
+          </div>
+        </div>
+      </div>
+
+      <div id="rotate-overlay">
+        <svg viewBox="0 0 100 100" width="72" height="72" aria-hidden="true">
+          <rect x="30" y="15" width="40" height="70" rx="6" fill="none" stroke="#eafcff" stroke-width="4" />
+          <circle cx="50" cy="78" r="2.5" fill="#eafcff" />
+          <path d="M78,40 a28,28 0 1 1 -8,-20" fill="none" stroke="#33d1ff" stroke-width="4" stroke-linecap="round" />
+          <path d="M78,40 l-10,-2 l4,-10 z" fill="#33d1ff" />
+        </svg>
+        <p>Gira tu dispositivo</p>
+        <p class="rotate-sub">Este simulador funciona en horizontal</p>
       </div>
     </div>
 

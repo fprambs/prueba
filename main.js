@@ -500,8 +500,30 @@ droneOptionEls.forEach((el) => {
   });
 });
 
+// Best-effort landscape lock: only Android Chrome supports a real
+// screen.orientation.lock(), and only while the page is fullscreen — iOS
+// Safari supports neither API at all. Both calls are feature-detected and
+// swallowed on failure; the CSS #rotate-overlay is what actually guarantees
+// landscape everywhere else, so this is pure progressive enhancement and
+// must never delay or block the existing start-up lines below.
+function tryLockLandscape() {
+  const el = document.documentElement;
+  if (el.requestFullscreen) {
+    el.requestFullscreen()
+      .then(() => {
+        if (screen.orientation && screen.orientation.lock) {
+          screen.orientation.lock("landscape").catch(() => {});
+        }
+      })
+      .catch(() => {});
+  } else if (screen.orientation && screen.orientation.lock) {
+    screen.orientation.lock("landscape").catch(() => {});
+  }
+}
+
 document.getElementById("start-btn").addEventListener("pointerdown", (e) => {
   e.preventDefault();
+  if (isTouchDevice) tryLockLandscape();
   document.getElementById("start-screen").classList.add("hidden");
   started = true;
   clock.getDelta(); // discard the idle time spent on the start screen
@@ -922,6 +944,172 @@ function updateHud() {
   throttleFill.style.height = `${pct}%`;
   throttleValue.textContent = `${pct}%`;
 }
+
+// ---------------------------------------------------------------------------
+// Stick tutorial — interactive DJI Mode-2 explainer, opened from the start
+// screen. Pure DOM/CSS/SVG: every "animation" is a CSS class toggle, driven
+// on demand by taps (or by the idle auto-demo loop below), never by the
+// render loop — there is no continuous state to draw here, unlike the live
+// attitude instrument above.
+// ---------------------------------------------------------------------------
+
+const STICK_DEMOS = {
+  throttle_up: {
+    stick: "left",
+    dir: "up",
+    name: "Gas (Throttle)",
+    desc: "Aumenta el empuje total de los motores: el dron asciende y gana altitud.",
+  },
+  throttle_down: {
+    stick: "left",
+    dir: "down",
+    name: "Gas (Throttle)",
+    desc: "Reduce el empuje total: el dron desciende de forma controlada. Mantenido, puede aterrizar.",
+  },
+  yaw_left: {
+    stick: "left",
+    dir: "left",
+    name: "Guiñada (Yaw)",
+    desc: "El dron gira sobre su propio eje vertical en sentido antihorario, sin desplazarse lateralmente.",
+  },
+  yaw_right: {
+    stick: "left",
+    dir: "right",
+    name: "Guiñada (Yaw)",
+    desc: "El dron gira sobre su propio eje vertical en sentido horario, sin desplazarse lateralmente.",
+  },
+  pitch_up: {
+    stick: "right",
+    dir: "up",
+    name: "Cabeceo (Pitch)",
+    desc: "El morro se inclina hacia adelante: el dron avanza sobre su eje longitudinal.",
+  },
+  pitch_down: {
+    stick: "right",
+    dir: "down",
+    name: "Cabeceo (Pitch)",
+    desc: "El morro se inclina hacia atrás: el dron retrocede de forma controlada.",
+  },
+  roll_left: {
+    stick: "right",
+    dir: "left",
+    name: "Alabeo (Roll)",
+    desc: "El dron se inclina y se desplaza hacia la izquierda, manteniendo su orientación si no hay otra entrada.",
+  },
+  roll_right: {
+    stick: "right",
+    dir: "right",
+    name: "Alabeo (Roll)",
+    desc: "El dron se inclina y se desplaza hacia la derecha, manteniendo su orientación si no hay otra entrada.",
+  },
+};
+
+const AUTO_DEMO_ORDER = [
+  "throttle_up",
+  "throttle_down",
+  "yaw_left",
+  "yaw_right",
+  "pitch_up",
+  "pitch_down",
+  "roll_left",
+  "roll_right",
+];
+
+const tutorialMoveName = document.getElementById("tutorial-move-name");
+const tutorialMoveDesc = document.getElementById("tutorial-move-desc");
+const droneTopdown = document.getElementById("drone-topdown");
+const droneTopdownGroup = document.getElementById("drone-topdown-group");
+const capLeft = document.getElementById("cap-left");
+const capRight = document.getElementById("cap-right");
+const arrowBtnEls = document.querySelectorAll(".arrow-btn");
+
+let autoDemoTimer = null;
+
+function playStickDemo(key) {
+  const demo = STICK_DEMOS[key];
+  if (!demo) return;
+
+  const cap = demo.stick === "left" ? capLeft : capRight;
+  const otherCap = demo.stick === "left" ? capRight : capLeft;
+
+  cap.classList.remove("pos-up", "pos-down", "pos-left", "pos-right");
+  cap.classList.add(`pos-${demo.dir}`, "highlight");
+  otherCap.classList.remove("pos-up", "pos-down", "pos-left", "pos-right", "highlight");
+
+  arrowBtnEls.forEach((el) => {
+    const active = el.dataset.stick === demo.stick && el.dataset.dir === demo.dir;
+    el.classList.toggle("active", active);
+  });
+
+  droneTopdown.classList.remove("demo-throttle-up", "demo-throttle-down");
+  if (key === "throttle_up") droneTopdown.classList.add("demo-throttle-up");
+  if (key === "throttle_down") droneTopdown.classList.add("demo-throttle-down");
+
+  droneTopdownGroup.classList.remove(
+    "demo-yaw-left",
+    "demo-yaw-right",
+    "demo-pitch-up",
+    "demo-pitch-down",
+    "demo-roll-left",
+    "demo-roll-right"
+  );
+  if (key === "yaw_left") droneTopdownGroup.classList.add("demo-yaw-left");
+  if (key === "yaw_right") droneTopdownGroup.classList.add("demo-yaw-right");
+  if (key === "pitch_up") droneTopdownGroup.classList.add("demo-pitch-up");
+  if (key === "pitch_down") droneTopdownGroup.classList.add("demo-pitch-down");
+  if (key === "roll_left") droneTopdownGroup.classList.add("demo-roll-left");
+  if (key === "roll_right") droneTopdownGroup.classList.add("demo-roll-right");
+
+  tutorialMoveName.textContent = demo.name;
+  tutorialMoveDesc.textContent = demo.desc;
+}
+
+function stopAutoDemo() {
+  if (autoDemoTimer) {
+    clearInterval(autoDemoTimer);
+    autoDemoTimer = null;
+  }
+}
+
+function startAutoDemo() {
+  stopAutoDemo();
+  let i = 0;
+  playStickDemo(AUTO_DEMO_ORDER[0]);
+  autoDemoTimer = setInterval(() => {
+    i = (i + 1) % AUTO_DEMO_ORDER.length;
+    playStickDemo(AUTO_DEMO_ORDER[i]);
+  }, 1800);
+}
+
+function openTutorial() {
+  document.getElementById("tutorial-screen").classList.remove("hidden");
+  startAutoDemo();
+}
+
+function closeTutorial() {
+  document.getElementById("tutorial-screen").classList.add("hidden");
+  stopAutoDemo();
+}
+
+arrowBtnEls.forEach((el) => {
+  el.addEventListener("pointerdown", (e) => {
+    e.preventDefault();
+    stopAutoDemo();
+    playStickDemo(el.dataset.key);
+  });
+});
+
+document.getElementById("tutorial-btn").addEventListener("pointerdown", (e) => {
+  e.preventDefault();
+  openTutorial();
+});
+document.getElementById("tutorial-close").addEventListener("pointerdown", (e) => {
+  e.preventDefault();
+  closeTutorial();
+});
+document.getElementById("tutorial-screen").addEventListener("pointerdown", (e) => {
+  if (e.target.id === "tutorial-screen") closeTutorial();
+});
 
 // ---------------------------------------------------------------------------
 // Main loop
