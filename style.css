@@ -111,35 +111,14 @@ html, body {
   font-weight: 700;
 }
 
-#crosshair {
+#hud-attitude {
   position: absolute;
   top: 50%;
   left: 50%;
-  width: 16px;
-  height: 16px;
-  margin: -8px 0 0 -8px;
-  border: 2px solid rgba(255, 255, 255, 0.55);
-  border-radius: 50%;
-}
-#crosshair::before,
-#crosshair::after {
-  content: "";
-  position: absolute;
-  background: rgba(255, 255, 255, 0.55);
-}
-#crosshair::before {
-  left: 50%;
-  top: -8px;
-  width: 2px;
-  height: 6px;
-  margin-left: -1px;
-}
-#crosshair::after {
-  top: 50%;
-  left: -8px;
-  height: 2px;
-  width: 6px;
-  margin-top: -1px;
+  width: 260px;
+  height: 180px;
+  margin: -90px 0 0 -130px;
+  pointer-events: none;
 }
 
 #hud-bottom {
@@ -171,19 +150,37 @@ body.touch-device #throttle-wrap {
   bottom: calc(190px + env(safe-area-inset-bottom, 0px));
 }
 
+/* DJI Fly-style virtual sticks: a quiet translucent disc at rest, a thin
+   inner ring for reference, and a soft accent glow that only appears while
+   a finger is actually on it — rather than a permanently-lit border. */
+
 .joystick {
   position: absolute;
   bottom: calc(24px + env(safe-area-inset-bottom, 0px));
-  width: 130px;
-  height: 130px;
+  width: 132px;
+  height: 132px;
   border-radius: 50%;
-  background: rgba(6, 14, 22, 0.45);
-  border: 2px solid rgba(90, 230, 255, 0.4);
+  background: radial-gradient(circle, rgba(255, 255, 255, 0.05), rgba(10, 16, 22, 0.35));
+  border: 1px solid rgba(234, 252, 255, 0.14);
   pointer-events: all;
   touch-action: none;
   display: flex;
   align-items: center;
   justify-content: center;
+  transition: border-color 0.15s ease, box-shadow 0.15s ease;
+}
+
+.joystick::before {
+  content: "";
+  position: absolute;
+  inset: 18px;
+  border-radius: 50%;
+  border: 1px solid rgba(234, 252, 255, 0.1);
+}
+
+.joystick.active {
+  border-color: rgba(51, 209, 255, 0.55);
+  box-shadow: 0 0 22px rgba(51, 209, 255, 0.25);
 }
 
 #joystick-left {
@@ -195,23 +192,30 @@ body.touch-device #throttle-wrap {
 }
 
 .joystick-knob {
-  width: 56px;
-  height: 56px;
+  width: 54px;
+  height: 54px;
   border-radius: 50%;
-  background: linear-gradient(135deg, #7fffcf, #33d1ff);
-  box-shadow: 0 0 14px rgba(51, 209, 255, 0.6);
+  background: rgba(234, 252, 255, 0.22);
+  border: 1px solid rgba(234, 252, 255, 0.4);
   pointer-events: none;
   will-change: transform;
+  transition: background 0.15s ease, border-color 0.15s ease, box-shadow 0.15s ease;
+}
+
+.joystick.active .joystick-knob {
+  background: linear-gradient(135deg, #7fffcf, #33d1ff);
+  border-color: transparent;
+  box-shadow: 0 0 16px rgba(51, 209, 255, 0.7);
 }
 
 .joystick-hint {
   position: absolute;
-  bottom: -22px;
+  bottom: -20px;
   left: 50%;
   transform: translateX(-50%);
   font-size: 9px;
   letter-spacing: 0.5px;
-  color: rgba(234, 252, 255, 0.6);
+  color: rgba(234, 252, 255, 0.4);
   white-space: nowrap;
   pointer-events: none;
 }
@@ -219,7 +223,7 @@ body.touch-device #throttle-wrap {
 #touch-buttons {
   position: absolute;
   right: 24px;
-  bottom: calc(180px + env(safe-area-inset-bottom, 0px));
+  bottom: calc(182px + env(safe-area-inset-bottom, 0px));
   display: flex;
   flex-direction: column;
   gap: 10px;
@@ -227,23 +231,26 @@ body.touch-device #throttle-wrap {
 }
 
 .touch-btn {
-  width: 46px;
-  height: 46px;
+  width: 44px;
+  height: 44px;
   border-radius: 50%;
-  background: rgba(6, 14, 22, 0.55);
-  border: 1px solid rgba(90, 230, 255, 0.4);
-  color: #eafcff;
-  font-size: 18px;
+  background: rgba(10, 16, 22, 0.4);
+  border: 1px solid rgba(234, 252, 255, 0.16);
+  color: rgba(234, 252, 255, 0.85);
+  font-size: 17px;
   display: flex;
   align-items: center;
   justify-content: center;
-  touch-action: none;
+  touch-action: manipulation;
   padding: 0;
+  transition: background 0.15s ease, border-color 0.15s ease, box-shadow 0.15s ease;
 }
 
 .touch-btn:active,
 .touch-btn.active {
-  background: rgba(51, 209, 255, 0.35);
+  background: rgba(51, 209, 255, 0.3);
+  border-color: rgba(51, 209, 255, 0.6);
+  box-shadow: 0 0 14px rgba(51, 209, 255, 0.35);
 }
 
 #start-screen {
@@ -327,6 +334,7 @@ body.touch-device #throttle-wrap {
   color: #eafcff;
   font-family: inherit;
   cursor: pointer;
+  touch-action: manipulation;
   transition: background 0.15s ease, border-color 0.15s ease;
 }
 
@@ -362,6 +370,7 @@ body.touch-device #throttle-wrap {
   border: none;
   border-radius: 10px;
   cursor: pointer;
+  touch-action: manipulation;
   transition: transform 0.1s ease;
 }
 

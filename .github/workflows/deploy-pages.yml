@@ -31,6 +31,7 @@ jobs:
           mkdir -p _site
           cp index.html style.css main.js favicon.svg _site/
           cp -r vendor _site/
+          sed -i "s/__BUILD_ID__/${GITHUB_SHA::8}/g" _site/index.html
 
       - name: Configure Pages
         uses: actions/configure-pages@v5

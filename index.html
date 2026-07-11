@@ -5,7 +5,7 @@
     <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no, viewport-fit=cover" />
     <title>Simulador de Vuelo de Dron</title>
     <link rel="icon" type="image/svg+xml" href="favicon.svg" />
-    <link rel="stylesheet" href="style.css" />
+    <link rel="stylesheet" href="style.css?v=__BUILD_ID__" />
   </head>
   <body>
     <canvas id="scene"></canvas>
@@ -14,7 +14,6 @@
       <div id="hud-top-left" class="panel">
         <div class="row"><span class="label">ALT</span><span id="hud-alt" class="value">0.0 m</span></div>
         <div class="row"><span class="label">VEL</span><span id="hud-speed" class="value">0.0 m/s</span></div>
-        <div class="row"><span class="label">RUMBO</span><span id="hud-heading" class="value">0°</span></div>
       </div>
 
       <div id="hud-top-right" class="panel">
@@ -30,7 +29,7 @@
         <div id="throttle-value">0%</div>
       </div>
 
-      <div id="crosshair"></div>
+      <canvas id="hud-attitude"></canvas>
 
       <div id="hud-bottom" class="panel">
         <b>Controles</b> —
@@ -104,7 +103,7 @@
       </div>
     </div>
 
-    <script src="vendor/three.min.js"></script>
-    <script src="main.js"></script>
+    <script src="vendor/three.min.js?v=__BUILD_ID__"></script>
+    <script src="main.js?v=__BUILD_ID__"></script>
   </body>
 </html>

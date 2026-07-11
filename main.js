@@ -9,10 +9,42 @@ const renderer = new THREE.WebGLRenderer({ canvas, antialias: true });
 renderer.setPixelRatio(Math.min(window.devicePixelRatio, 2));
 renderer.shadowMap.enabled = true;
 renderer.shadowMap.type = THREE.PCFSoftShadowMap;
+renderer.toneMapping = THREE.ACESFilmicToneMapping;
+renderer.toneMappingExposure = 1.1;
 
 const scene = new THREE.Scene();
-scene.background = new THREE.Color(0x8fd0ff);
-scene.fog = new THREE.Fog(0x8fd0ff, 60, 420);
+
+// Sky: a small vertical-gradient canvas texture on a large inward-facing
+// sphere, instead of a flat color — cheap (one draw at startup, one big
+// basic-material mesh) but reads far better than a solid fill, and unlike
+// a screen-locked backdrop it correctly shows more ground/sky as the
+// camera pitches (important in FPV mode).
+function makeSkyTexture() {
+  const c = document.createElement("canvas");
+  c.width = 32;
+  c.height = 256;
+  const ctx = c.getContext("2d");
+  const grad = ctx.createLinearGradient(0, 0, 0, 256);
+  grad.addColorStop(0, "#1a4d8f");
+  grad.addColorStop(0.5, "#6fb3e8");
+  grad.addColorStop(0.78, "#bfe0ff");
+  grad.addColorStop(1, "#eef7ff");
+  ctx.fillStyle = grad;
+  ctx.fillRect(0, 0, 32, 256);
+  const tex = new THREE.CanvasTexture(c);
+  tex.colorSpace = THREE.SRGBColorSpace;
+  return tex;
+}
+
+const SKY_HORIZON_COLOR = 0xbfe0ff;
+const sky = new THREE.Mesh(
+  new THREE.SphereGeometry(900, 24, 16),
+  new THREE.MeshBasicMaterial({ map: makeSkyTexture(), side: THREE.BackSide, fog: false, depthWrite: false })
+);
+scene.add(sky);
+
+scene.background = new THREE.Color(SKY_HORIZON_COLOR);
+scene.fog = new THREE.Fog(SKY_HORIZON_COLOR, 60, 420);
 
 const camera = new THREE.PerspectiveCamera(
   70,
@@ -54,24 +86,56 @@ scene.add(sun);
 
 const GROUND_SIZE = 1000;
 
-const groundMat = new THREE.MeshStandardMaterial({ color: 0x4c8a3c, roughness: 1 });
+function randRange(min, max) {
+  return min + Math.random() * (max - min);
+}
+
+// Procedural tileable grass-variation texture — a mottled fill instead of a
+// flat color, generated once on a small canvas (no external image assets).
+function makeGroundTexture() {
+  const size = 256;
+  const c = document.createElement("canvas");
+  c.width = size;
+  c.height = size;
+  const ctx = c.getContext("2d");
+  ctx.fillStyle = "#4c8a3c";
+  ctx.fillRect(0, 0, size, size);
+  for (let i = 0; i < 3000; i++) {
+    const x = Math.random() * size;
+    const y = Math.random() * size;
+    const dark = Math.random() < 0.5;
+    ctx.fillStyle = dark ? `rgba(20,45,10,${0.05 + Math.random() * 0.1})` : `rgba(150,205,95,${0.04 + Math.random() * 0.08})`;
+    ctx.beginPath();
+    ctx.arc(x, y, 1 + Math.random() * 2.5, 0, Math.PI * 2);
+    ctx.fill();
+  }
+  const tex = new THREE.CanvasTexture(c);
+  tex.wrapS = THREE.RepeatWrapping;
+  tex.wrapT = THREE.RepeatWrapping;
+  tex.repeat.set(GROUND_SIZE / 8, GROUND_SIZE / 8);
+  tex.colorSpace = THREE.SRGBColorSpace;
+  return tex;
+}
+
+const groundMat = new THREE.MeshStandardMaterial({ map: makeGroundTexture(), roughness: 1 });
 const ground = new THREE.Mesh(new THREE.PlaneGeometry(GROUND_SIZE, GROUND_SIZE, 1, 1), groundMat);
 ground.rotation.x = -Math.PI / 2;
 ground.receiveShadow = true;
 scene.add(ground);
 
 const grid = new THREE.GridHelper(GROUND_SIZE, 100, 0x2a5522, 0x2a5522);
-grid.material.opacity = 0.25;
+grid.material.opacity = 0.12;
 grid.material.transparent = true;
 scene.add(grid);
 
-function randRange(min, max) {
-  return min + Math.random() * (max - min);
-}
-
 // Scattered low-poly trees/pillars for a sense of scale & obstacles.
 const trunkMat = new THREE.MeshStandardMaterial({ color: 0x7a5230, roughness: 1 });
-const leavesMat = new THREE.MeshStandardMaterial({ color: 0x2f7a34, roughness: 0.9 });
+const leavesMats = [];
+for (let i = 0; i < 6; i++) {
+  const leafColor = new THREE.Color(0x2f7a34);
+  leafColor.offsetHSL(randRange(-0.04, 0.04), randRange(-0.1, 0.05), randRange(-0.08, 0.06));
+  leavesMats.push(new THREE.MeshStandardMaterial({ color: leafColor, roughness: 0.9 }));
+}
 const obstacles = []; // { position: Vector3, radius }
 
 function addTree(x, z) {
@@ -82,6 +146,7 @@ function addTree(x, z) {
   trunk.castShadow = true;
   group.add(trunk);
 
+  const leavesMat = leavesMats[Math.floor(Math.random() * leavesMats.length)];
   const leaves = new THREE.Mesh(new THREE.ConeGeometry(randRange(2, 3.2), randRange(4, 6), 8), leavesMat);
   leaves.position.y = trunkH + 2;
   leaves.castShadow = true;
@@ -318,6 +383,8 @@ function setupJoystick(baseEl, knobEl, onChange) {
     knobEl.style.transform = `translate(${x}px, ${y}px)`;
   }
 
+  const DEADZONE = 0.06; // fraction of radius ignored near center, to absorb thumb jitter
+
   function handleMove(clientX, clientY) {
     const rect = baseEl.getBoundingClientRect();
     const cx = rect.left + rect.width / 2;
@@ -331,12 +398,27 @@ function setupJoystick(baseEl, knobEl, onChange) {
       dy = (dy / dist) * r;
     }
     setKnob(dx, dy);
-    onChange(dx / r, -dy / r); // invert Y so "up" is positive
+
+    // Radial deadzone: ignore the innermost DEADZONE fraction, then rescale
+    // so the stick still reaches full deflection (±1) right at the edge.
+    let nx = dx / r;
+    let ny = -dy / r; // invert Y so "up" is positive
+    const mag = Math.hypot(nx, ny);
+    if (mag < DEADZONE) {
+      nx = 0;
+      ny = 0;
+    } else {
+      const scale = (mag - DEADZONE) / (1 - DEADZONE) / mag;
+      nx *= scale;
+      ny *= scale;
+    }
+    onChange(nx, ny);
   }
 
   function reset() {
     jState.active = false;
     jState.pointerId = null;
+    baseEl.classList.remove("active");
     setKnob(0, 0);
     onChange(0, 0);
   }
@@ -344,6 +426,7 @@ function setupJoystick(baseEl, knobEl, onChange) {
   baseEl.addEventListener("pointerdown", (e) => {
     jState.active = true;
     jState.pointerId = e.pointerId;
+    baseEl.classList.add("active");
     baseEl.setPointerCapture(e.pointerId);
     handleMove(e.clientX, e.clientY);
   });
@@ -407,7 +490,8 @@ document.getElementById("btn-reset").addEventListener("pointerdown", (e) => {
 // preview behind the menu, then take off with whichever was last selected.
 const droneOptionEls = document.querySelectorAll(".drone-option");
 droneOptionEls.forEach((el) => {
-  el.addEventListener("click", () => {
+  el.addEventListener("pointerdown", (e) => {
+    e.preventDefault();
     droneOptionEls.forEach((o) => o.classList.remove("selected"));
     el.classList.add("selected");
     selectedDroneKey = el.dataset.drone;
@@ -416,7 +500,8 @@ droneOptionEls.forEach((el) => {
   });
 });
 
-document.getElementById("start-btn").addEventListener("click", () => {
+document.getElementById("start-btn").addEventListener("pointerdown", (e) => {
+  e.preventDefault();
   document.getElementById("start-screen").classList.add("hidden");
   started = true;
   clock.getDelta(); // discard the idle time spent on the start screen
@@ -493,16 +578,27 @@ function updatePhysics(dt) {
     -1,
     1
   );
-  const pitchInput = THREE.MathUtils.clamp(
+  let pitchInput = THREE.MathUtils.clamp(
     (keys.has("ArrowUp") ? 1 : 0) - (keys.has("ArrowDown") ? 1 : 0) + touch.pitch,
     -1,
     1
   );
-  const rollInput = THREE.MathUtils.clamp(
+  let rollInput = THREE.MathUtils.clamp(
     (keys.has("ArrowLeft") ? 1 : 0) - (keys.has("ArrowRight") ? 1 : 0) + touch.roll,
     -1,
     1
   );
+
+  // The touch joystick is already confined to a unit circle by handleMove(),
+  // but keyboard input (e.g. ArrowUp+ArrowLeft together) can independently
+  // hit ±1 on both axes at once. Clamp the *combined* lean so a diagonal
+  // input can never exceed the single-axis max tilt.
+  const leanMag = Math.hypot(pitchInput, rollInput);
+  if (leanMag > 1) {
+    pitchInput /= leanMag;
+    rollInput /= leanMag;
+  }
+
   const yawInput = THREE.MathUtils.clamp(
     (keys.has("KeyA") ? 1 : 0) - (keys.has("KeyD") ? 1 : 0) + touch.yaw,
     -1,
@@ -666,9 +762,151 @@ function updateCamera(dt) {
 
 const hudAlt = document.getElementById("hud-alt");
 const hudSpeed = document.getElementById("hud-speed");
-const hudHeading = document.getElementById("hud-heading");
 const throttleFill = document.getElementById("throttle-bar-fill");
 const throttleValue = document.getElementById("throttle-value");
+
+// Attitude/heading instrument — a small flight-instrument-style readout
+// (artificial horizon with a pitch ladder, plus a scrolling heading tape)
+// drawn on a 2D canvas. Cheaper on mobile than animating many DOM nodes,
+// and canvas trig makes the roll-rotated/pitch-shifted ladder simple.
+const attitudeCanvas = document.getElementById("hud-attitude");
+const attitudeCtx = attitudeCanvas.getContext("2d");
+let attCssW = 260;
+let attCssH = 180;
+
+function resizeAttitudeCanvas() {
+  const rect = attitudeCanvas.getBoundingClientRect();
+  const dpr = Math.min(window.devicePixelRatio || 1, 2);
+  attCssW = rect.width;
+  attCssH = rect.height;
+  attitudeCanvas.width = Math.round(attCssW * dpr);
+  attitudeCanvas.height = Math.round(attCssH * dpr);
+  attitudeCtx.setTransform(dpr, 0, 0, dpr, 0, 0);
+}
+window.addEventListener("resize", resizeAttitudeCanvas);
+resizeAttitudeCanvas();
+
+const PITCH_PX_PER_DEG = 1.7;
+
+function drawAttitude(heading) {
+  const ctx = attitudeCtx;
+  ctx.clearRect(0, 0, attCssW, attCssH);
+
+  const cx = attCssW / 2;
+  const dialCy = attCssH * 0.34;
+  const radius = 54;
+
+  // --- Horizon + pitch ladder, clipped to a circular dial ---
+  ctx.save();
+  ctx.beginPath();
+  ctx.arc(cx, dialCy, radius, 0, Math.PI * 2);
+  ctx.clip();
+
+  ctx.translate(cx, dialCy);
+  ctx.rotate(state.roll);
+  ctx.translate(0, THREE.MathUtils.radToDeg(state.pitch) * PITCH_PX_PER_DEG);
+
+  const span = radius * 2.4;
+  ctx.fillStyle = "#3f7fc4";
+  ctx.fillRect(-span, -span, span * 2, span);
+  ctx.fillStyle = "#5a4326";
+  ctx.fillRect(-span, 0, span * 2, span);
+
+  ctx.strokeStyle = "rgba(255,255,255,0.9)";
+  ctx.lineWidth = 2;
+  ctx.beginPath();
+  ctx.moveTo(-span, 0);
+  ctx.lineTo(span, 0);
+  ctx.stroke();
+
+  ctx.strokeStyle = "rgba(255,255,255,0.55)";
+  ctx.fillStyle = "rgba(255,255,255,0.8)";
+  ctx.font = "9px sans-serif";
+  ctx.textAlign = "center";
+  ctx.lineWidth = 1.5;
+  for (let d = -40; d <= 40; d += 10) {
+    if (d === 0) continue;
+    const y = -d * PITCH_PX_PER_DEG;
+    const halfW = d % 20 === 0 ? 20 : 12;
+    ctx.beginPath();
+    ctx.moveTo(-halfW, y);
+    ctx.lineTo(halfW, y);
+    ctx.stroke();
+    if (d % 20 === 0) {
+      ctx.fillText(String(d), -halfW - 12, y + 3);
+      ctx.fillText(String(d), halfW + 12, y + 3);
+    }
+  }
+
+  ctx.restore();
+
+  // Dial bezel + fixed drone-reference marker (stays level, doesn't rotate).
+  ctx.beginPath();
+  ctx.arc(cx, dialCy, radius, 0, Math.PI * 2);
+  ctx.strokeStyle = "rgba(234,252,255,0.35)";
+  ctx.lineWidth = 1.5;
+  ctx.stroke();
+
+  ctx.strokeStyle = "#33d1ff";
+  ctx.lineWidth = 2.5;
+  ctx.beginPath();
+  ctx.moveTo(cx - 22, dialCy);
+  ctx.lineTo(cx - 8, dialCy);
+  ctx.moveTo(cx + 8, dialCy);
+  ctx.lineTo(cx + 22, dialCy);
+  ctx.stroke();
+  ctx.beginPath();
+  ctx.arc(cx, dialCy, 2.5, 0, Math.PI * 2);
+  ctx.fillStyle = "#33d1ff";
+  ctx.fill();
+
+  // --- Heading tape: scrolling compass ruler below the dial ---
+  const tapeY = attCssH - 38;
+  const tapeHalfWidth = attCssW / 2 - 10;
+  ctx.save();
+  ctx.beginPath();
+  ctx.rect(cx - tapeHalfWidth, tapeY - 14, tapeHalfWidth * 2, 30);
+  ctx.clip();
+
+  const pxPerDeg = 2.6;
+  ctx.strokeStyle = "rgba(234,252,255,0.4)";
+  ctx.fillStyle = "rgba(234,252,255,0.75)";
+  ctx.font = "10px sans-serif";
+  ctx.textAlign = "center";
+  ctx.lineWidth = 1;
+  const cardinals = { 0: "N", 90: "E", 180: "S", 270: "O" };
+  const start = Math.floor((heading - 70) / 15) * 15;
+  for (let deg = start; deg <= heading + 70; deg += 15) {
+    const norm = ((deg % 360) + 360) % 360;
+    const x = cx + (deg - heading) * pxPerDeg;
+    const isCardinal = norm % 90 === 0;
+    ctx.beginPath();
+    ctx.moveTo(x, tapeY);
+    ctx.lineTo(x, tapeY - (isCardinal ? 10 : 5));
+    ctx.stroke();
+    if (isCardinal) {
+      ctx.font = "bold 11px sans-serif";
+      ctx.fillText(cardinals[norm], x, tapeY + 12);
+      ctx.font = "10px sans-serif";
+    } else if (norm % 45 === 0) {
+      ctx.fillText(String(norm), x, tapeY + 11);
+    }
+  }
+  ctx.restore();
+
+  ctx.fillStyle = "#33d1ff";
+  ctx.beginPath();
+  ctx.moveTo(cx, tapeY - 18);
+  ctx.lineTo(cx - 5, tapeY - 10);
+  ctx.lineTo(cx + 5, tapeY - 10);
+  ctx.closePath();
+  ctx.fill();
+
+  ctx.fillStyle = "#eafcff";
+  ctx.font = "bold 12px sans-serif";
+  ctx.textAlign = "center";
+  ctx.fillText(`${Math.round(heading)}°`, cx, attCssH - 4);
+}
 
 function updateHud() {
   hudAlt.textContent = `${state.position.y.toFixed(1)} m`;
@@ -677,7 +915,8 @@ function updateHud() {
   _fwd.set(0, 0, 1).applyQuaternion(state.quaternion);
   let heading = (Math.atan2(_fwd.x, _fwd.z) * 180) / Math.PI;
   if (heading < 0) heading += 360;
-  hudHeading.textContent = `${heading.toFixed(0)}°`;
+
+  drawAttitude(heading);
 
   const pct = Math.round(state.throttle * 100);
   throttleFill.style.height = `${pct}%`;
