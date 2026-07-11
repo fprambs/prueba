@@ -1,4 +1,4 @@
-# 🛸 Simulador de Vuelo de Dron
+# 🛸 AustroDrone
 
 Simulador de vuelo de dron 3D en el navegador, hecho con [Three.js](https://threejs.org/) y JavaScript puro (sin build ni dependencias que instalar).
 
