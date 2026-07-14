@@ -22,16 +22,17 @@ Luego abre `http://localhost:8000` en el navegador.
 | `A` / `D` | Girar sobre su propio eje (guiñada) |
 | `Shift` | Impulso extra |
 | `Espacio` | Autoestabilizar (nivelar el dron) |
-| `C` | Cambiar de cámara (persecución / FPV / orbital) |
+| `C` | Cambiar de cámara (geográfica / FPV / cinemática) |
+| `[` / `]` | Inclinar el gimbal de la cámara FPV |
 | `R` | Reiniciar posición |
 
 ## Características
 
-- Modelo de vuelo con física simplificada: empuje, gravedad, arrastre aerodinámico y amortiguación angular.
-- Tres modos de cámara: persecución en tercera persona, FPV (primera persona montada en el dron) y orbital cinemática.
+- Modelo de vuelo con control de velocidad objetivo (altitude/position hold estilo DJI): los sticks mandan una velocidad de ascenso/avance deseada y el dron converge suavemente hacia ella, deteniéndose y manteniendo posición de inmediato al centrarlos.
+- Tres modos de cámara: Geográfica (persecución en tercera persona), FPV (montada en el morro del dron, con gimbal inclinable) y Cinemático (seguimiento en tercera persona con retraso suave). Las transiciones entre cámaras se mezclan suavemente.
 - Mundo con terreno, árboles y torres como obstáculos con colisión básica.
 - Aros amarillos para atravesar y sumar puntos, que se reposicionan aleatoriamente tras pasarlos.
-- HUD con altitud, velocidad, rumbo, gas y contador de puertas superadas.
+- HUD con altitud, velocidad, rumbo y contador de puertas superadas.
 
 ## Estructura del proyecto
 

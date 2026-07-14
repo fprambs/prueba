@@ -18,18 +18,18 @@
 
       <div id="hud-top-right" class="panel">
         <div class="row"><span class="label">PUERTAS</span><span id="hud-gates" class="value">0</span></div>
-        <div class="row"><span class="label">CÁMARA</span><span id="hud-camera" class="value">Persecución</span></div>
-      </div>
-
-      <div id="throttle-wrap" class="panel">
-        <div class="throttle-label">GAS</div>
-        <div id="throttle-bar-bg">
-          <div id="throttle-bar-fill"></div>
-        </div>
-        <div id="throttle-value">0%</div>
+        <div class="row"><span class="label">CÁMARA</span><span id="hud-camera" class="value">Geográfica</span></div>
       </div>
 
       <canvas id="hud-attitude"></canvas>
+
+      <!-- FPV gimbal tilt control — only shown while Cam 2 (FPV) is active. -->
+      <div id="gimbal-wrap" class="panel hidden">
+        <div class="gimbal-label">GIMBAL</div>
+        <div id="gimbal-track">
+          <div id="gimbal-knob"></div>
+        </div>
+      </div>
 
       <div id="hud-bottom" class="panel">
         <b>Controles</b> —
@@ -77,7 +77,8 @@
             <li><b>A / D</b> — Girar sobre su eje (guiñada)</li>
             <li><b>Shift</b> — Impulso extra</li>
             <li><b>Espacio</b> — Autoestabilizar (nivelar)</li>
-            <li><b>C</b> — Cambiar cámara (persecución / FPV / orbital)</li>
+            <li><b>C</b> — Cambiar cámara (geográfica / FPV / cinemática)</li>
+            <li><b>[ / ]</b> — Inclinar el gimbal de la cámara FPV</li>
             <li><b>R</b> — Reiniciar posición</li>
           </ul>
           <ul id="start-touch-list" class="hidden">
@@ -86,6 +87,7 @@
             <li><b>⚖️</b> — Mantén pulsado para autoestabilizar</li>
             <li><b>⚡</b> — Mantén pulsado para impulso extra</li>
             <li><b>📷</b> — Cambiar cámara &nbsp; <b>⟲</b> — Reiniciar</li>
+            <li><b>Deslizador GIMBAL</b> — Arrastra para inclinar la cámara FPV</li>
           </ul>
 
           <div id="drone-picker">

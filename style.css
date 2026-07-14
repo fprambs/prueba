@@ -71,46 +71,6 @@ html, body {
   color: #e8fffb;
 }
 
-#throttle-wrap {
-  bottom: 90px;
-  left: max(16px, env(safe-area-inset-left, 0px));
-  width: 60px;
-  display: flex;
-  flex-direction: column;
-  align-items: center;
-  gap: 6px;
-}
-
-.throttle-label {
-  font-size: 11px;
-  letter-spacing: 1px;
-  color: #7fd8e8;
-  font-weight: 700;
-}
-
-#throttle-bar-bg {
-  width: 18px;
-  height: 140px;
-  background: rgba(255, 255, 255, 0.08);
-  border-radius: 8px;
-  border: 1px solid rgba(90, 230, 255, 0.35);
-  display: flex;
-  align-items: flex-end;
-  overflow: hidden;
-}
-
-#throttle-bar-fill {
-  width: 100%;
-  height: 0%;
-  background: linear-gradient(180deg, #7fffcf, #33d1ff);
-  transition: height 0.06s linear;
-}
-
-#throttle-value {
-  font-size: 12px;
-  font-weight: 700;
-}
-
 #hud-attitude {
   position: absolute;
   top: 50%;
@@ -129,6 +89,61 @@ html, body {
   white-space: nowrap;
 }
 
+/* FPV gimbal tilt slider — only visible while Cam 2 (FPV) is active.
+   Same visual language as the rest of the HUD (panel background/border),
+   a vertical track echoing the earlier throttle bar, with a draggable
+   knob that holds wherever it's released, like a real gimbal dial. */
+
+#gimbal-wrap {
+  top: 50%;
+  right: max(16px, env(safe-area-inset-right, 0px));
+  transform: translateY(-50%);
+  width: 46px;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 8px;
+  pointer-events: all;
+}
+
+/* On touch devices #touch-buttons forms a tall column on the right edge
+   at this same height — push the gimbal further left so its drag area
+   never overlaps the camera/level/boost/reset buttons underneath it. */
+body.touch-device #gimbal-wrap {
+  right: calc(max(24px, env(safe-area-inset-right, 0px)) + 60px);
+}
+
+.gimbal-label {
+  font-size: 10px;
+  letter-spacing: 1px;
+  color: #7fd8e8;
+  font-weight: 700;
+}
+
+#gimbal-track {
+  position: relative;
+  width: 18px;
+  height: 160px;
+  background: rgba(255, 255, 255, 0.08);
+  border-radius: 9px;
+  border: 1px solid rgba(90, 230, 255, 0.35);
+  touch-action: none;
+}
+
+#gimbal-knob {
+  position: absolute;
+  left: 50%;
+  top: 0;
+  width: 26px;
+  height: 26px;
+  border-radius: 50%;
+  transform: translate(-50%, -50%);
+  background: linear-gradient(135deg, #7fffcf, #33d1ff);
+  border: 1px solid rgba(234, 252, 255, 0.4);
+  box-shadow: 0 0 12px rgba(51, 209, 255, 0.5);
+  cursor: grab;
+}
+
 /* ---------------------------------------------------------------------
    Touch controls (virtual joysticks + buttons) — hidden by default,
    shown by main.js when it detects a touch-capable device.
@@ -144,10 +159,6 @@ body.touch-device #touch-controls {
 
 body.touch-device #hud-bottom {
   display: none;
-}
-
-body.touch-device #throttle-wrap {
-  bottom: calc(190px + env(safe-area-inset-bottom, 0px));
 }
 
 /* DJI Fly-style virtual sticks: a quiet translucent disc at rest, a thin
@@ -774,12 +785,8 @@ body.touch-device #throttle-wrap {
     margin: 0 0 0 -90px;
   }
 
-  #throttle-bar-bg {
-    height: 90px;
-  }
-
-  body.touch-device #throttle-wrap {
-    bottom: calc(165px + env(safe-area-inset-bottom, 0px));
+  #gimbal-track {
+    height: 100px;
   }
 
   #touch-buttons {

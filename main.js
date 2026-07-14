@@ -233,8 +233,9 @@ const DRONE_TYPES = {
     scale: 1.0,
     maxTiltDeg: 26,
     maxYawRate: 2.0,
-    maxThrustAccel: 22,
-    linearDrag: 0.55,
+    maxClimbRate: 5,
+    maxHorizSpeed: 14,
+    velocityResponse: 8.0,
     rateResponse: 7.0,
   },
   racer: {
@@ -247,8 +248,9 @@ const DRONE_TYPES = {
     scale: 0.85,
     maxTiltDeg: 40,
     maxYawRate: 3.2,
-    maxThrustAccel: 30,
-    linearDrag: 0.42,
+    maxClimbRate: 7,
+    maxHorizSpeed: 24,
+    velocityResponse: 12.0,
     rateResponse: 10.0,
   },
   cinema: {
@@ -261,8 +263,9 @@ const DRONE_TYPES = {
     scale: 1.3,
     maxTiltDeg: 16,
     maxYawRate: 1.2,
-    maxThrustAccel: 17,
-    linearDrag: 0.7,
+    maxClimbRate: 3,
+    maxHorizSpeed: 8,
+    velocityResponse: 4.0,
     rateResponse: 5.0,
   },
 };
@@ -345,9 +348,15 @@ scene.add(drone);
 // ---------------------------------------------------------------------------
 
 const keys = new Set();
-let cameraMode = 0; // 0 = chase, 1 = fpv, 2 = orbit
-const cameraModes = ["Persecución", "FPV", "Orbital"];
+let cameraMode = 0; // 0 = geográfica (chase), 1 = fpv, 2 = cinemático (follow)
+const cameraModes = ["Geográfica", "FPV", "Cinemático"];
 let started = false;
+
+const gimbalWrapEl = document.getElementById("gimbal-wrap");
+
+function updateGimbalVisibility() {
+  gimbalWrapEl.classList.toggle("hidden", cameraMode !== 1);
+}
 
 window.addEventListener("keydown", (e) => {
   keys.add(e.code);
@@ -362,6 +371,8 @@ window.addEventListener("keyup", (e) => keys.delete(e.code));
 function cycleCamera() {
   cameraMode = (cameraMode + 1) % cameraModes.length;
   document.getElementById("hud-camera").textContent = cameraModes[cameraMode];
+  updateGimbalVisibility();
+  beginCameraTransition();
 }
 
 // Touch controls: virtual joysticks (left = throttle/yaw, right = pitch/roll)
@@ -447,6 +458,9 @@ setupJoystick(document.getElementById("joystick-left"), document.querySelector("
   touch.throttle = y;
 });
 setupJoystick(document.getElementById("joystick-right"), document.querySelector("#joystick-right .joystick-knob"), (x, y) => {
+  // Negated: with this quaternion convention (roll = Euler Z), a positive
+  // state.roll leans the drone's up vector toward -X, so the stick's screen-
+  // right deflection must map to a *negative* roll to bank/move it right.
   touch.roll = -x;
   touch.pitch = y;
 });
@@ -541,17 +555,16 @@ const state = {
   roll: 0, // bank left/right lean, radians — bounded, like a real drone
   yawRate: 0, // current yaw angular velocity, for smoothing
   quaternion: new THREE.Quaternion(),
-  throttle: 0.55, // 0..1, ~0.5 roughly hovers
 };
 
 const DRONE_RADIUS = 0.75;
-const GRAVITY = 9.81;
 
 // Per-drone flight tuning, applied by applyDroneType() from DRONE_TYPES.
 let MAX_TILT = THREE.MathUtils.degToRad(droneConfig.maxTiltDeg); // max lean angle
 let MAX_YAW_RATE = droneConfig.maxYawRate; // rad/s
-let MAX_THRUST_ACCEL = droneConfig.maxThrustAccel; // m/s^2 at full throttle
-let LINEAR_DRAG = droneConfig.linearDrag;
+let MAX_CLIMB_RATE = droneConfig.maxClimbRate; // m/s, vertical speed at full stick
+let MAX_HORIZ_SPEED = droneConfig.maxHorizSpeed; // m/s, ground speed at max lean
+let VELOCITY_RESPONSE = droneConfig.velocityResponse; // how fast velocity tracks its target
 let RATE_RESPONSE = droneConfig.rateResponse; // how fast pitch/roll/yaw track input
 
 function applyDroneType() {
@@ -565,8 +578,9 @@ function applyDroneType() {
 
   MAX_TILT = THREE.MathUtils.degToRad(droneConfig.maxTiltDeg);
   MAX_YAW_RATE = droneConfig.maxYawRate;
-  MAX_THRUST_ACCEL = droneConfig.maxThrustAccel;
-  LINEAR_DRAG = droneConfig.linearDrag;
+  MAX_CLIMB_RATE = droneConfig.maxClimbRate;
+  MAX_HORIZ_SPEED = droneConfig.maxHorizSpeed;
+  VELOCITY_RESPONSE = droneConfig.velocityResponse;
   RATE_RESPONSE = droneConfig.rateResponse;
 }
 
@@ -578,13 +592,10 @@ function resetDrone() {
   state.roll = 0;
   state.yawRate = 0;
   state.quaternion.identity();
-  state.throttle = 0.55;
 }
 
 const _fwd = new THREE.Vector3();
 const _up = new THREE.Vector3();
-const _thrust = new THREE.Vector3();
-const _dragForce = new THREE.Vector3();
 
 function updatePhysics(dt) {
   if (dt <= 0) return;
@@ -627,11 +638,6 @@ function updatePhysics(dt) {
     1
   );
 
-  // Throttle
-  const throttleRate = 0.6; // per second
-  state.throttle += throttleInput * throttleRate * dt;
-  state.throttle = THREE.MathUtils.clamp(state.throttle, 0, 1);
-
   // Angle-mode flight controller: stick deflection maps to a *target lean
   // angle* (clamped to MAX_TILT), not a rotation rate — the same "angle
   // mode" a real consumer drone flies in. Centering the stick always
@@ -657,22 +663,44 @@ function updatePhysics(dt) {
 
   state.quaternion.setFromEuler(new THREE.Euler(state.pitch, state.yaw, state.roll, "YXZ"));
 
-  // Thrust along the drone's local up axis — tilting it forward/sideways
-  // (within MAX_TILT) diverts part of that thrust into horizontal motion,
-  // so climbing while pitched forward naturally climbs *and* moves forward.
+  // Velocity-target controller (real DJI GPS/altitude-hold behavior): the
+  // sticks command a *target velocity*, not a force to integrate. The
+  // drone's actual velocity converges toward that target exponentially, so
+  // centering a stick immediately drives the target to zero and the drone
+  // brakes to a stop and holds position/altitude — no inertia, no manual
+  // thrust-vs-gravity balancing.
   _up.set(0, 1, 0).applyQuaternion(state.quaternion);
-  const thrustAccel = MAX_THRUST_ACCEL * state.throttle * boost;
-  _thrust.copy(_up).multiplyScalar(thrustAccel);
 
-  // Gravity
-  const gravityAccel = -GRAVITY;
+  const targetClimbRate = throttleInput * MAX_CLIMB_RATE * boost;
 
-  // Aerodynamic drag opposing velocity (simple quadratic-ish drag).
-  _dragForce.copy(state.velocity).multiplyScalar(-LINEAR_DRAG * state.velocity.length());
+  // Horizontal target velocity comes from the drone's current lean
+  // direction (already smoothed by the angle-mode controller above), so
+  // leveling out — via the right stick or the level-hold button — also
+  // brings the horizontal target to zero and brakes/holds position.
+  // The lean direction's horizontal magnitude naturally maxes out at
+  // sin(MAX_TILT), so it's normalized against that ceiling — full stick
+  // deflection reaches the drone's actual MAX_HORIZ_SPEED, independent of
+  // MAX_TILT, per the requirement to raise top speed without touching the
+  // max lean angle.
+  const horizLean = Math.hypot(_up.x, _up.z);
+  const leanCeiling = Math.sin(MAX_TILT) || 1;
+  const leanFrac = THREE.MathUtils.clamp(horizLean / leanCeiling, 0, 1);
+  const targetSpeed = leanFrac * MAX_HORIZ_SPEED * boost;
+  const dirX = horizLean > 1e-5 ? _up.x / horizLean : 0;
+  const dirZ = horizLean > 1e-5 ? _up.z / horizLean : 0;
+  const targetVelX = dirX * targetSpeed;
+  const targetVelZ = dirZ * targetSpeed;
 
-  state.velocity.x += (_thrust.x + _dragForce.x) * dt;
-  state.velocity.y += (_thrust.y + gravityAccel + _dragForce.y) * dt;
-  state.velocity.z += (_thrust.z + _dragForce.z) * dt;
+  const velTrack = 1 - Math.exp(-VELOCITY_RESPONSE * dt);
+  state.velocity.x += (targetVelX - state.velocity.x) * velTrack;
+  state.velocity.y += (targetClimbRate - state.velocity.y) * velTrack;
+  state.velocity.z += (targetVelZ - state.velocity.z) * velTrack;
+
+  // Snap tiny residual velocity to exact zero when holding position, so the
+  // drone doesn't creep instead of holding rock-still.
+  if (Math.abs(targetVelX) < 1e-4 && Math.abs(state.velocity.x) < 0.01) state.velocity.x = 0;
+  if (Math.abs(targetClimbRate) < 1e-4 && Math.abs(state.velocity.y) < 0.01) state.velocity.y = 0;
+  if (Math.abs(targetVelZ) < 1e-4 && Math.abs(state.velocity.z) < 0.01) state.velocity.z = 0;
 
   state.position.addScaledVector(state.velocity, dt);
 
@@ -709,8 +737,9 @@ function updatePhysics(dt) {
   drone.position.copy(state.position);
   drone.quaternion.copy(state.quaternion);
 
-  // Spin propellers proportional to throttle.
-  const spinSpeed = 4 + state.throttle * 40;
+  // Spin propellers proportional to commanded lift demand (throttle push or lean).
+  const liftDemand = Math.max(Math.abs(throttleInput), leanMag);
+  const spinSpeed = 4 + liftDemand * 40;
   propellers.forEach((p, i) => {
     p.rotation.y += spinSpeed * dt * (i % 2 === 0 ? 1 : -1);
   });
@@ -741,40 +770,149 @@ function updateGates() {
 const camOffset = new THREE.Vector3();
 const camTarget = new THREE.Vector3();
 const desiredCamPos = new THREE.Vector3();
-let orbitAngle = 0;
+const worldUp = new THREE.Vector3(0, 1, 0);
+
+// Cam 3 "Seguimiento Cinemático" keeps its own separately-damped look
+// target (softer than the position damping), which is what gives it that
+// springy, drone-mounted-camera lag instead of rigidly snapping to look
+// straight at the drone every frame.
+const cinematicLookTarget = new THREE.Vector3();
+let cinematicLookInit = false;
+
+// FPV gimbal tilt — purely a camera-look adjustment layered on top of the
+// drone's own orientation; it never touches state.pitch/roll/yaw. Range
+// matches a real gimbal dial: -90° (straight down) to +30° (up), and it
+// holds wherever it's left, no spring-back.
+const GIMBAL_MIN = THREE.MathUtils.degToRad(-90);
+const GIMBAL_MAX = THREE.MathUtils.degToRad(30);
+const GIMBAL_KEY_RATE = THREE.MathUtils.degToRad(60); // deg/sec via [ and ]
+let gimbalPitch = 0;
+
+const gimbalTrackEl = document.getElementById("gimbal-track");
+const gimbalKnobEl = document.getElementById("gimbal-knob");
+
+function setGimbalPitch(rad) {
+  gimbalPitch = THREE.MathUtils.clamp(rad, GIMBAL_MIN, GIMBAL_MAX);
+  const frac = (gimbalPitch - GIMBAL_MIN) / (GIMBAL_MAX - GIMBAL_MIN);
+  gimbalKnobEl.style.top = `${(1 - frac) * 100}%`;
+}
+setGimbalPitch(gimbalPitch);
+
+(function setupGimbalSlider() {
+  let dragging = false;
+  let pointerId = null;
+
+  function fromClientY(clientY) {
+    const rect = gimbalTrackEl.getBoundingClientRect();
+    const frac = THREE.MathUtils.clamp(1 - (clientY - rect.top) / rect.height, 0, 1);
+    setGimbalPitch(GIMBAL_MIN + frac * (GIMBAL_MAX - GIMBAL_MIN));
+  }
+
+  gimbalTrackEl.addEventListener("pointerdown", (e) => {
+    dragging = true;
+    pointerId = e.pointerId;
+    gimbalTrackEl.setPointerCapture(e.pointerId);
+    fromClientY(e.clientY);
+  });
+  gimbalTrackEl.addEventListener("pointermove", (e) => {
+    if (!dragging || e.pointerId !== pointerId) return;
+    fromClientY(e.clientY);
+  });
+  const stopDrag = (e) => {
+    if (e.pointerId !== pointerId) return;
+    dragging = false;
+    pointerId = null;
+  };
+  gimbalTrackEl.addEventListener("pointerup", stopDrag);
+  gimbalTrackEl.addEventListener("pointercancel", stopDrag);
+})();
+
+// Camera-switch transition: capture the outgoing look orientation and
+// slerp into the new mode's orientation over ~400ms, so switching cameras
+// never cuts instantly — only the *direction the camera looks* needs this
+// treatment, since position in every mode is already lerped
+// continuously from wherever the camera currently sits.
+const _camHelper = new THREE.Object3D();
+const _desiredQuat = new THREE.Quaternion();
+const camTransition = { active: false, t: 0, duration: 0.4, fromQuat: new THREE.Quaternion() };
+
+function beginCameraTransition() {
+  camTransition.fromQuat.copy(camera.quaternion);
+  camTransition.t = 0;
+  camTransition.active = true;
+}
+
+function applyCameraLook(camPos, lookTarget, upVec, dt) {
+  camera.up.copy(upVec);
+  _camHelper.position.copy(camPos);
+  _camHelper.up.copy(upVec);
+  _camHelper.lookAt(lookTarget);
+  _desiredQuat.copy(_camHelper.quaternion);
+
+  if (camTransition.active) {
+    camTransition.t += dt / camTransition.duration;
+    if (camTransition.t >= 1) {
+      camTransition.t = 1;
+      camTransition.active = false;
+    }
+    const s = camTransition.t * camTransition.t * (3 - 2 * camTransition.t); // smoothstep
+    camera.quaternion.slerpQuaternions(camTransition.fromQuat, _desiredQuat, s);
+  } else {
+    camera.quaternion.copy(_desiredQuat);
+  }
+}
 
 function updateCamera(dt) {
   _fwd.set(0, 0, 1).applyQuaternion(state.quaternion);
   _up.set(0, 1, 0).applyQuaternion(state.quaternion);
 
+  if (cameraMode === 1) {
+    if (keys.has("BracketRight")) setGimbalPitch(gimbalPitch + GIMBAL_KEY_RATE * dt);
+    if (keys.has("BracketLeft")) setGimbalPitch(gimbalPitch - GIMBAL_KEY_RATE * dt);
+  }
+
   if (cameraMode === 0) {
-    // Chase camera: behind & above, softly following yaw only (keeps horizon level).
+    // Cam 1 — Geográfica: 3rd-person chase, behind & above, softly
+    // following yaw only (keeps the horizon level).
     const yaw = Math.atan2(_fwd.x, _fwd.z);
     camOffset.set(Math.sin(yaw) * -8, 3.2, Math.cos(yaw) * -8);
     desiredCamPos.copy(state.position).add(camOffset);
-    const lerpAmt = 1 - Math.exp(-5 * dt);
-    camera.position.lerp(desiredCamPos, lerpAmt);
+    camera.position.lerp(desiredCamPos, 1 - Math.exp(-5 * dt));
     camTarget.copy(state.position).add(new THREE.Vector3(0, 0.5, 0));
-    camera.lookAt(camTarget);
+    applyCameraLook(camera.position, camTarget, worldUp, dt);
+    cinematicLookInit = false;
   } else if (cameraMode === 1) {
-    // FPV: mounted on the drone's nose, following full orientation.
+    // Cam 2 — FPV: mounted on the drone's nose, following full drone
+    // orientation, plus an independent gimbal tilt composited on top of
+    // the look direction only — the drone's own attitude is untouched.
     const fpvOffset = new THREE.Vector3(0, 0.3, 0.85).applyQuaternion(state.quaternion);
-    camera.position.copy(state.position).add(fpvOffset);
-    camTarget.copy(state.position).add(_fwd.clone().multiplyScalar(10)).add(new THREE.Vector3(0, 0.1, 0));
-    camera.up.copy(_up);
-    camera.lookAt(camTarget);
+    desiredCamPos.copy(state.position).add(fpvOffset);
+    camera.position.lerp(desiredCamPos, 1 - Math.exp(-14 * dt));
+
+    const gimbalQuat = new THREE.Quaternion().setFromAxisAngle(new THREE.Vector3(1, 0, 0), gimbalPitch);
+    const lookDir = new THREE.Vector3(0, 0, 1)
+      .applyQuaternion(state.quaternion.clone().multiply(gimbalQuat))
+      .multiplyScalar(10);
+    camTarget.copy(camera.position).add(lookDir);
+    applyCameraLook(camera.position, camTarget, _up, dt);
+    cinematicLookInit = false;
   } else {
-    // Orbital: slow rotating camera around the drone for a cinematic view.
-    orbitAngle += dt * 0.25;
-    const r = 14;
-    desiredCamPos.set(
-      state.position.x + Math.sin(orbitAngle) * r,
-      state.position.y + 5,
-      state.position.z + Math.cos(orbitAngle) * r
-    );
-    camera.position.lerp(desiredCamPos, 1 - Math.exp(-3 * dt));
-    camera.up.set(0, 1, 0);
-    camera.lookAt(state.position);
+    // Cam 3 — Seguimiento Cinemático: further & higher than Cam 1, with
+    // two independently-damped smoothing layers (position + look target)
+    // so it feels like a drone-mounted follow cam with soft, springy lag,
+    // reacting to real drone motion rather than orbiting on its own.
+    const yaw = Math.atan2(_fwd.x, _fwd.z);
+    camOffset.set(Math.sin(yaw) * -16, 7.5, Math.cos(yaw) * -16);
+    desiredCamPos.copy(state.position).add(camOffset);
+    camera.position.lerp(desiredCamPos, 1 - Math.exp(-1.8 * dt));
+
+    if (!cinematicLookInit) {
+      cinematicLookTarget.copy(state.position);
+      cinematicLookInit = true;
+    }
+    cinematicLookTarget.lerp(state.position, 1 - Math.exp(-2.5 * dt));
+    camTarget.copy(cinematicLookTarget).add(new THREE.Vector3(0, 0.5, 0));
+    applyCameraLook(camera.position, camTarget, worldUp, dt);
   }
 }
 
@@ -784,8 +922,6 @@ function updateCamera(dt) {
 
 const hudAlt = document.getElementById("hud-alt");
 const hudSpeed = document.getElementById("hud-speed");
-const throttleFill = document.getElementById("throttle-bar-fill");
-const throttleValue = document.getElementById("throttle-value");
 
 // Attitude/heading instrument — a small flight-instrument-style readout
 // (artificial horizon with a pitch ladder, plus a scrolling heading tape)
@@ -939,10 +1075,6 @@ function updateHud() {
   if (heading < 0) heading += 360;
 
   drawAttitude(heading);
-
-  const pct = Math.round(state.throttle * 100);
-  throttleFill.style.height = `${pct}%`;
-  throttleValue.textContent = `${pct}%`;
 }
 
 // ---------------------------------------------------------------------------
