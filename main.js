@@ -223,50 +223,68 @@ let gatesPassed = 0;
 // ---------------------------------------------------------------------------
 
 const DRONE_TYPES = {
-  explorer: {
-    label: "Explorador",
+  exp_play: {
+    label: "EXP PLAY",
+    category: "Recreativo / Audiovisual",
     emoji: "🛸",
-    description: "Equilibrado y estable",
-    bodyColor: 0x222831,
-    armColor: 0x3d4756,
-    accentColor: 0x33d1ff,
+    description: "Compacto y ágil, ideal para vuelos recreativos",
+    image: "assets/aircraft-exp-play.jpg",
+    specs: ["Compacto y portátil", "Cámara 4K estabilizada", "Ideal para contenido y vuelos recreativos"],
+    weightLabel: "< 900 g",
+    flightMinutes: 40,
+    rangeKm: 12,
+    bodyColor: 0x8fd400,
+    armColor: 0x1a1e14,
+    accentColor: 0x9dff33,
     scale: 1.0,
-    maxTiltDeg: 26,
-    maxYawRate: 2.0,
+    maxTiltDeg: 28,
+    maxYawRate: 2.2,
     maxClimbRate: 5,
-    maxHorizSpeed: 14,
-    velocityResponse: 8.0,
-    rateResponse: 7.0,
+    maxHorizSpeed: 15,
+    velocityResponse: 8.5,
+    rateResponse: 7.5,
   },
-  racer: {
-    label: "Carreras",
-    emoji: "🏁",
-    description: "Ágil y muy veloz",
-    bodyColor: 0x3a0d10,
-    armColor: 0x611414,
+  inspector_pro: {
+    label: "INSPECTOR PRO",
+    category: "Inspección / Televigilancia",
+    emoji: "🛰️",
+    description: "Preciso y estable, para trabajo profesional",
+    image: "assets/aircraft-inspector-pro.jpg",
+    specs: ["Cámara zoom y térmica", "Sensor láser y visión nocturna", "Resistente a condiciones exigentes"],
+    weightLabel: "3.7 kg",
+    flightMinutes: 50,
+    rangeKm: 15,
+    bodyColor: 0x2b2f36,
+    armColor: 0x1c1f24,
     accentColor: 0xff4433,
-    scale: 0.85,
-    maxTiltDeg: 40,
-    maxYawRate: 3.2,
-    maxClimbRate: 7,
-    maxHorizSpeed: 24,
-    velocityResponse: 12.0,
-    rateResponse: 10.0,
+    scale: 1.15,
+    maxTiltDeg: 20,
+    maxYawRate: 1.6,
+    maxClimbRate: 6,
+    maxHorizSpeed: 12,
+    velocityResponse: 10.0,
+    rateResponse: 9.0,
   },
-  cinema: {
-    label: "Cinemático",
-    emoji: "🎥",
-    description: "Suave y muy estable",
-    bodyColor: 0xe6e8ea,
-    armColor: 0xc7cbd1,
-    accentColor: 0xffd166,
-    scale: 1.3,
-    maxTiltDeg: 16,
-    maxYawRate: 1.2,
+  agri_spray: {
+    label: "AGRI SPRAY X8",
+    category: "Agrícola / Aspersión",
+    emoji: "🌾",
+    description: "Pesado y estable, para grandes cargas",
+    image: "assets/aircraft-agri-spray.jpg",
+    specs: ["Tanque de 20 litros", "Sistema de aspersión de alta precisión", "Cobertura eficiente de grandes áreas"],
+    weightLabel: "30 kg",
+    flightMinutes: 25,
+    rangeKm: 5,
+    bodyColor: 0xe8ebee,
+    armColor: 0x24272c,
+    accentColor: 0x6dd66d,
+    scale: 1.5,
+    maxTiltDeg: 14,
+    maxYawRate: 1.0,
     maxClimbRate: 3,
-    maxHorizSpeed: 8,
-    velocityResponse: 4.0,
-    rateResponse: 5.0,
+    maxHorizSpeed: 7,
+    velocityResponse: 3.5,
+    rateResponse: 4.0,
   },
 };
 
@@ -337,7 +355,7 @@ function buildDrone(config) {
   return { group, propellers };
 }
 
-let selectedDroneKey = "explorer";
+let selectedDroneKey = "exp_play";
 let droneConfig = DRONE_TYPES[selectedDroneKey];
 let { group: drone, propellers } = buildDrone(droneConfig);
 drone.position.set(0, 6, 0);
@@ -348,8 +366,8 @@ scene.add(drone);
 // ---------------------------------------------------------------------------
 
 const keys = new Set();
-let cameraMode = 0; // 0 = geográfica (chase), 1 = fpv, 2 = cinemático (follow)
-const cameraModes = ["Geográfica", "FPV", "Cinemático"];
+let cameraMode = 0; // 0 = geográfica (chase), 1 = fpv, 2 = cinemático (follow), 3 = panorámica (tight follow)
+const cameraModes = ["Geográfica", "FPV", "Cinemático", "Panorámica"];
 let started = false;
 
 const gimbalWrapEl = document.getElementById("gimbal-wrap");
@@ -500,17 +518,45 @@ document.getElementById("btn-reset").addEventListener("pointerdown", (e) => {
   if (started) resetDrone();
 });
 
-// Drone picker on the start screen — pick a model, see it swap live in the
-// preview behind the menu, then take off with whichever was last selected.
-const droneOptionEls = document.querySelectorAll(".drone-option");
-droneOptionEls.forEach((el) => {
+// Aircraft picker on the preflight "Selecciona tu aeronave" step — pick a
+// model, see it swap live in the preview behind the menu, then take off
+// with whichever was last selected.
+const aircraftOptionEls = document.querySelectorAll(".aircraft-option");
+aircraftOptionEls.forEach((el) => {
   el.addEventListener("pointerdown", (e) => {
     e.preventDefault();
-    droneOptionEls.forEach((o) => o.classList.remove("selected"));
+    aircraftOptionEls.forEach((o) => o.classList.remove("selected"));
     el.classList.add("selected");
     selectedDroneKey = el.dataset.drone;
     droneConfig = DRONE_TYPES[selectedDroneKey];
     applyDroneType();
+  });
+});
+
+// Preflight flow — 3 steps shown before the simulator starts: bienvenida →
+// selecciona tu aeronave → consejos de seguridad. Only one step panel is
+// visible at a time; "Atrás" buttons carry a data-back-to pointing at the
+// step to return to.
+const preflightStepIds = ["step-welcome", "step-aircraft", "step-safety"];
+
+function showPreflightStep(id) {
+  preflightStepIds.forEach((key) => {
+    document.getElementById(key).classList.toggle("hidden", key !== id);
+  });
+}
+
+document.getElementById("welcome-next-btn").addEventListener("pointerdown", (e) => {
+  e.preventDefault();
+  showPreflightStep("step-aircraft");
+});
+document.getElementById("aircraft-next-btn").addEventListener("pointerdown", (e) => {
+  e.preventDefault();
+  showPreflightStep("step-safety");
+});
+document.querySelectorAll(".preflight-btn-back").forEach((el) => {
+  el.addEventListener("pointerdown", (e) => {
+    e.preventDefault();
+    showPreflightStep(el.dataset.backTo);
   });
 });
 
@@ -538,9 +584,9 @@ function tryLockLandscape() {
 document.getElementById("start-btn").addEventListener("pointerdown", (e) => {
   e.preventDefault();
   if (isTouchDevice) tryLockLandscape();
-  document.getElementById("start-screen").classList.add("hidden");
+  document.getElementById("preflight").classList.add("hidden");
   started = true;
-  clock.getDelta(); // discard the idle time spent on the start screen
+  clock.getDelta(); // discard the idle time spent on the preflight screens
 });
 
 // ---------------------------------------------------------------------------
@@ -567,6 +613,18 @@ let MAX_HORIZ_SPEED = droneConfig.maxHorizSpeed; // m/s, ground speed at max lea
 let VELOCITY_RESPONSE = droneConfig.velocityResponse; // how fast velocity tracks its target
 let RATE_RESPONSE = droneConfig.rateResponse; // how fast pitch/roll/yaw track input
 
+// Performance readout (Task: "ver el desempeño y performance de la
+// aeronave") — battery counts down in real time from the aircraft's rated
+// flight time, and range counts down from its rated distance as it
+// actually flies, using each aircraft's real spec sheet numbers.
+let batterySecondsLeft = droneConfig.flightMinutes * 60;
+let rangeKmLeft = droneConfig.rangeKm;
+
+function resetPerformance() {
+  batterySecondsLeft = droneConfig.flightMinutes * 60;
+  rangeKmLeft = droneConfig.rangeKm;
+}
+
 function applyDroneType() {
   scene.remove(drone);
   const built = buildDrone(droneConfig);
@@ -582,6 +640,7 @@ function applyDroneType() {
   MAX_HORIZ_SPEED = droneConfig.maxHorizSpeed;
   VELOCITY_RESPONSE = droneConfig.velocityResponse;
   RATE_RESPONSE = droneConfig.rateResponse;
+  resetPerformance();
 }
 
 function resetDrone() {
@@ -592,6 +651,7 @@ function resetDrone() {
   state.roll = 0;
   state.yawRate = 0;
   state.quaternion.identity();
+  resetPerformance();
 }
 
 const _fwd = new THREE.Vector3();
@@ -704,6 +764,11 @@ function updatePhysics(dt) {
 
   state.position.addScaledVector(state.velocity, dt);
 
+  // Performance readout: battery ticks down in real time, range ticks down
+  // with distance actually flown (1 world unit = 1 meter).
+  batterySecondsLeft = Math.max(0, batterySecondsLeft - dt);
+  rangeKmLeft = Math.max(0, rangeKmLeft - (state.velocity.length() * dt) / 1000);
+
   // Ground collision
   if (state.position.y < DRONE_RADIUS) {
     state.position.y = DRONE_RADIUS;
@@ -759,7 +824,7 @@ function updateGates() {
       gate.mesh.material.emissive.setHex(0x00ff66);
       setTimeout(() => placeGate(gate), 600);
     }
-    gate.mesh.rotation.y += 0.4 * 0.016;
+    gate.mesh.rotation.y += 0.12 * 0.016;
   }
 }
 
@@ -832,7 +897,11 @@ setGimbalPitch(gimbalPitch);
 // never cuts instantly — only the *direction the camera looks* needs this
 // treatment, since position in every mode is already lerped
 // continuously from wherever the camera currently sits.
-const _camHelper = new THREE.Object3D();
+// A real camera (unused for rendering) rather than a plain Object3D: Three.js's
+// Object3D.lookAt() only aligns -Z with the target for cameras/lights — a plain
+// Object3D gets the inverted (mesh-facing, +Z-toward-target) convention, which
+// would point every camera mode 180° away from what it's supposed to look at.
+const _camHelper = new THREE.PerspectiveCamera();
 const _desiredQuat = new THREE.Quaternion();
 const camTransition = { active: false, t: 0, duration: 0.4, fromQuat: new THREE.Quaternion() };
 
@@ -896,7 +965,7 @@ function updateCamera(dt) {
     camTarget.copy(camera.position).add(lookDir);
     applyCameraLook(camera.position, camTarget, _up, dt);
     cinematicLookInit = false;
-  } else {
+  } else if (cameraMode === 2) {
     // Cam 3 — Seguimiento Cinemático: further & higher than Cam 1, with
     // two independently-damped smoothing layers (position + look target)
     // so it feels like a drone-mounted follow cam with soft, springy lag,
@@ -913,6 +982,18 @@ function updateCamera(dt) {
     cinematicLookTarget.lerp(state.position, 1 - Math.exp(-2.5 * dt));
     camTarget.copy(cinematicLookTarget).add(new THREE.Vector3(0, 0.5, 0));
     applyCameraLook(camera.position, camTarget, worldUp, dt);
+  } else {
+    // Cam 4 — Panorámica: a tighter, snappier 3rd-person follow than the
+    // Cinemático — sits directly behind and a bit above, always keeping
+    // the whole drone silhouette in frame with minimal lag, closer to how
+    // a vehicle-follow camera in an open-world game tracks the player.
+    const yaw = Math.atan2(_fwd.x, _fwd.z);
+    camOffset.set(Math.sin(yaw) * -13, 5.5, Math.cos(yaw) * -13);
+    desiredCamPos.copy(state.position).add(camOffset);
+    camera.position.lerp(desiredCamPos, 1 - Math.exp(-4 * dt));
+    camTarget.copy(state.position).add(new THREE.Vector3(0, 0.8, 0));
+    applyCameraLook(camera.position, camTarget, worldUp, dt);
+    cinematicLookInit = false;
   }
 }
 
@@ -922,6 +1003,8 @@ function updateCamera(dt) {
 
 const hudAlt = document.getElementById("hud-alt");
 const hudSpeed = document.getElementById("hud-speed");
+const hudBattery = document.getElementById("hud-battery");
+const hudRange = document.getElementById("hud-range");
 
 // Attitude/heading instrument — a small flight-instrument-style readout
 // (artificial horizon with a pitch ladder, plus a scrolling heading tape)
@@ -1069,6 +1152,11 @@ function drawAttitude(heading) {
 function updateHud() {
   hudAlt.textContent = `${state.position.y.toFixed(1)} m`;
   hudSpeed.textContent = `${state.velocity.length().toFixed(1)} m/s`;
+
+  const batteryMin = Math.floor(batterySecondsLeft / 60);
+  const batterySec = Math.floor(batterySecondsLeft % 60);
+  hudBattery.textContent = `${String(batteryMin).padStart(2, "0")}:${String(batterySec).padStart(2, "0")}`;
+  hudRange.textContent = `${rangeKmLeft.toFixed(1)} km`;
 
   _fwd.set(0, 0, 1).applyQuaternion(state.quaternion);
   let heading = (Math.atan2(_fwd.x, _fwd.z) * 180) / Math.PI;

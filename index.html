@@ -3,6 +3,9 @@
   <head>
     <meta charset="UTF-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no, viewport-fit=cover" />
+    <meta http-equiv="Cache-Control" content="no-cache, no-store, must-revalidate" />
+    <meta http-equiv="Pragma" content="no-cache" />
+    <meta http-equiv="Expires" content="0" />
     <title>AustroDrone — Simulador de Vuelo</title>
     <link rel="icon" type="image/svg+xml" href="favicon.svg" />
     <link rel="stylesheet" href="style.css?v=__BUILD_ID__" />
@@ -14,6 +17,8 @@
       <div id="hud-top-left" class="panel">
         <div class="row"><span class="label">ALT</span><span id="hud-alt" class="value">0.0 m</span></div>
         <div class="row"><span class="label">VEL</span><span id="hud-speed" class="value">0.0 m/s</span></div>
+        <div class="row"><span class="label">🔋 BATERÍA</span><span id="hud-battery" class="value">00:00</span></div>
+        <div class="row"><span class="label">📡 ALCANCE</span><span id="hud-range" class="value">0.0 km</span></div>
       </div>
 
       <div id="hud-top-right" class="panel">
@@ -55,9 +60,10 @@
         </div>
       </div>
 
-      <div id="start-screen">
-        <div id="start-box">
-          <h1 id="brand-heading">
+      <div id="preflight">
+        <!-- Step 1: Bienvenida -->
+        <div id="step-welcome" class="preflight-step">
+          <div class="preflight-topbar">
             <svg id="brand-mark" viewBox="0 0 32 32" role="img" aria-label="AustroDrone">
               <defs>
                 <linearGradient id="brand-grad" x1="10%" y1="0%" x2="90%" y2="100%">
@@ -67,52 +73,211 @@
               </defs>
               <path d="M16,5 L28,27 L19,27 L16,20 L13,27 L4,27 Z" fill="url(#brand-grad)" />
             </svg>
-            AustroDrone
-          </h1>
-          <p>Vuela un cuadricóptero, atraviesa los aros amarillos y explora el mapa.</p>
-          <ul id="start-keyboard-list">
-            <li><b>W / S</b> — Subir / bajar gas (empuje vertical)</li>
-            <li><b>↑ / ↓</b> — Inclinar adelante / atrás (cabeceo)</li>
-            <li><b>← / →</b> — Inclinar izquierda / derecha (alabeo)</li>
-            <li><b>A / D</b> — Girar sobre su eje (guiñada)</li>
-            <li><b>Shift</b> — Impulso extra</li>
-            <li><b>Espacio</b> — Autoestabilizar (nivelar)</li>
-            <li><b>C</b> — Cambiar cámara (geográfica / FPV / cinemática)</li>
-            <li><b>[ / ]</b> — Inclinar el gimbal de la cámara FPV</li>
-            <li><b>R</b> — Reiniciar posición</li>
-          </ul>
-          <ul id="start-touch-list" class="hidden">
-            <li><b>Joystick ⬅️</b> — Arriba/abajo: gas · Izq/der: guiñada</li>
-            <li><b>Joystick ➡️</b> — Arriba/abajo: cabeceo · Izq/der: alabeo</li>
-            <li><b>⚖️</b> — Mantén pulsado para autoestabilizar</li>
-            <li><b>⚡</b> — Mantén pulsado para impulso extra</li>
-            <li><b>📷</b> — Cambiar cámara &nbsp; <b>⟲</b> — Reiniciar</li>
-            <li><b>Deslizador GIMBAL</b> — Arrastra para inclinar la cámara FPV</li>
-          </ul>
+            <span class="preflight-brand-name">AustroDrone</span>
+          </div>
 
-          <div id="drone-picker">
-            <div class="drone-picker-label">Elige tu dron</div>
-            <div id="drone-options">
-              <button type="button" class="drone-option selected" data-drone="explorer">
-                <span class="drone-option-emoji">🛸</span>
-                <span class="drone-option-name">Explorador</span>
-                <span class="drone-option-desc">Equilibrado y estable</span>
-              </button>
-              <button type="button" class="drone-option" data-drone="racer">
-                <span class="drone-option-emoji">🏁</span>
-                <span class="drone-option-name">Carreras</span>
-                <span class="drone-option-desc">Ágil y muy veloz</span>
-              </button>
-              <button type="button" class="drone-option" data-drone="cinema">
-                <span class="drone-option-emoji">🎥</span>
-                <span class="drone-option-name">Cinemático</span>
-                <span class="drone-option-desc">Suave y muy estable</span>
-              </button>
+          <div class="preflight-body">
+            <div class="preflight-pilot-panel preflight-pilot-panel-wave">
+              <img class="preflight-pilot-photo" src="assets/pilot-welcome.jpg" alt="Piloto AustroDrone" />
+            </div>
+
+            <div class="preflight-card preflight-welcome-card">
+              <img id="hero-drone" src="assets/hero-drone.jpg" alt="Dron AustroDrone en vuelo" />
+              <div class="preflight-eyebrow">Bienvenido/a al</div>
+              <h1 id="brand-heading">Simulador de vuelo RPA <span class="accent">de AustroDrone</span></h1>
+              <p>
+                Aquí podrás comprender los movimientos fundamentales de una aeronave RPA en un entorno seguro y
+                controlado. Practica, aprende y mejora tus habilidades como piloto profesional sin riesgos ni
+                costos asociados a operaciones reales.
+              </p>
+
+              <div id="welcome-features">
+                <div class="welcome-feature">
+                  <span class="welcome-feature-icon">🛡️</span>
+                  <span class="welcome-feature-title">Entorno seguro</span>
+                  <span class="welcome-feature-desc">Entrena sin riesgos para aeronaves ni personas.</span>
+                </div>
+                <div class="welcome-feature">
+                  <span class="welcome-feature-icon">🛸</span>
+                  <span class="welcome-feature-title">Aprende a tu ritmo</span>
+                  <span class="welcome-feature-desc">Practica maniobras clave y mejora tus habilidades.</span>
+                </div>
+                <div class="welcome-feature">
+                  <span class="welcome-feature-icon">🎯</span>
+                  <span class="welcome-feature-title">Preparación real</span>
+                  <span class="welcome-feature-desc">Desarrolla confianza y precisión para operaciones reales.</span>
+                </div>
+                <div class="welcome-feature">
+                  <span class="welcome-feature-icon">📈</span>
+                  <span class="welcome-feature-title">Mejora continua</span>
+                  <span class="welcome-feature-desc">Cada vuelo es una oportunidad para seguir mejorando.</span>
+                </div>
+              </div>
+
+              <details id="controls-details">
+                <summary>🎮 Ver controles de teclado / táctil</summary>
+                <ul id="start-keyboard-list">
+                  <li><b>W / S</b> — Subir / bajar gas (empuje vertical)</li>
+                  <li><b>↑ / ↓</b> — Inclinar adelante / atrás (cabeceo)</li>
+                  <li><b>← / →</b> — Inclinar izquierda / derecha (alabeo)</li>
+                  <li><b>A / D</b> — Girar sobre su eje (guiñada)</li>
+                  <li><b>Shift</b> — Impulso extra</li>
+                  <li><b>Espacio</b> — Autoestabilizar (nivelar)</li>
+                  <li><b>C</b> — Cambiar cámara (geográfica / FPV / cinemática / panorámica)</li>
+                  <li><b>[ / ]</b> — Inclinar el gimbal de la cámara FPV</li>
+                  <li><b>R</b> — Reiniciar posición</li>
+                </ul>
+                <ul id="start-touch-list" class="hidden">
+                  <li><b>Joystick ⬅️</b> — Arriba/abajo: gas · Izq/der: guiñada</li>
+                  <li><b>Joystick ➡️</b> — Arriba/abajo: cabeceo · Izq/der: alabeo</li>
+                  <li><b>⚖️</b> — Mantén pulsado para autoestabilizar</li>
+                  <li><b>⚡</b> — Mantén pulsado para impulso extra</li>
+                  <li><b>📷</b> — Cambiar cámara &nbsp; <b>⟲</b> — Reiniciar</li>
+                  <li><b>Deslizador GIMBAL</b> — Arrastra para inclinar la cámara FPV</li>
+                </ul>
+                <button id="tutorial-btn" type="button">🎮 Cómo se controla (interactivo)</button>
+              </details>
             </div>
           </div>
 
-          <button id="tutorial-btn" type="button">🎮 Cómo se controla</button>
-          <button id="start-btn">Despegar 🚀</button>
+          <div class="preflight-nav">
+            <span class="preflight-nav-spacer"></span>
+            <span class="preflight-nav-spacer"></span>
+            <button id="welcome-next-btn" class="preflight-btn-primary" type="button">Siguiente →</button>
+          </div>
+        </div>
+
+        <!-- Step 2: Selecciona tu aeronave -->
+        <div id="step-aircraft" class="preflight-step hidden">
+          <div class="preflight-topbar">
+            <svg class="brand-mark-sm" viewBox="0 0 32 32" role="img" aria-label="AustroDrone">
+              <path d="M16,5 L28,27 L19,27 L16,20 L13,27 L4,27 Z" fill="url(#brand-grad)" />
+            </svg>
+            <span class="preflight-brand-name">AustroDrone</span>
+          </div>
+
+          <div class="preflight-body">
+            <div class="preflight-card">
+              <div class="preflight-card-header">
+                <span class="preflight-card-icon">🛸</span>
+                <div>
+                  <h2>Selecciona tu <span class="accent">aeronave</span></h2>
+                  <p>Elige el modelo que mejor se adapte a la misión que vas a realizar.</p>
+                </div>
+              </div>
+              <div id="aircraft-options">
+                <button type="button" class="aircraft-option selected" data-drone="exp_play">
+                  <span class="aircraft-option-category">🎥 Recreativo / Audiovisual</span>
+                  <img class="aircraft-option-photo" src="assets/aircraft-exp-play.jpg" alt="EXP PLAY" />
+                  <span class="aircraft-option-name">EXP PLAY</span>
+                  <ul class="aircraft-option-specs">
+                    <li>Compacto y portátil</li>
+                    <li>Cámara 4K estabilizada</li>
+                    <li>Ideal para vuelos recreativos</li>
+                  </ul>
+                  <span class="aircraft-option-footer"><span>⚖️ &lt; 900 g</span><span>📡 12 km</span></span>
+                </button>
+                <button type="button" class="aircraft-option" data-drone="inspector_pro">
+                  <span class="aircraft-option-category">🛡️ Inspección / Televigilancia</span>
+                  <img class="aircraft-option-photo" src="assets/aircraft-inspector-pro.jpg" alt="INSPECTOR PRO" />
+                  <span class="aircraft-option-name">INSPECTOR PRO</span>
+                  <ul class="aircraft-option-specs">
+                    <li>Cámara zoom y térmica</li>
+                    <li>Sensor láser y visión nocturna</li>
+                    <li>Resistente a condiciones exigentes</li>
+                  </ul>
+                  <span class="aircraft-option-footer"><span>⚖️ 3.7 kg</span><span>📡 15 km</span></span>
+                </button>
+                <button type="button" class="aircraft-option" data-drone="agri_spray">
+                  <span class="aircraft-option-category">🌾 Agrícola / Aspersión</span>
+                  <img class="aircraft-option-photo" src="assets/aircraft-agri-spray.jpg" alt="AGRI SPRAY X8" />
+                  <span class="aircraft-option-name">AGRI SPRAY X8</span>
+                  <ul class="aircraft-option-specs">
+                    <li>Tanque de 20 litros</li>
+                    <li>Aspersión de alta precisión</li>
+                    <li>Cobertura de grandes áreas</li>
+                  </ul>
+                  <span class="aircraft-option-footer"><span>⚖️ 30 kg</span><span>📡 5 km</span></span>
+                </button>
+              </div>
+            </div>
+
+            <div class="preflight-pilot-panel">
+              <img class="preflight-pilot-photo" src="assets/pilot-aircraft.jpg" alt="Piloto AustroDrone" />
+              <div class="preflight-speech-bubble">
+                <b>¡Hola, piloto!</b>
+                <p>Selecciona la aeronave que mejor se adapte a la misión que vas a realizar.</p>
+              </div>
+            </div>
+          </div>
+
+          <div class="preflight-nav">
+            <button class="preflight-btn-back" data-back-to="step-welcome" type="button">← Atrás</button>
+            <div class="preflight-tip">💡 La seguridad comienza antes del despegue. <b>Vuela responsable, vuela seguro.</b></div>
+            <button id="aircraft-next-btn" class="preflight-btn-primary" type="button">Empezar sesión →</button>
+          </div>
+        </div>
+
+        <!-- Step 3: Consejos de seguridad -->
+        <div id="step-safety" class="preflight-step hidden">
+          <div class="preflight-topbar">
+            <svg class="brand-mark-sm" viewBox="0 0 32 32" role="img" aria-label="AustroDrone">
+              <path d="M16,5 L28,27 L19,27 L16,20 L13,27 L4,27 Z" fill="url(#brand-grad)" />
+            </svg>
+            <span class="preflight-brand-name">AustroDrone</span>
+          </div>
+
+          <div class="preflight-body">
+            <div class="preflight-pilot-panel">
+              <img class="preflight-pilot-photo" src="assets/pilot-safety.jpg" alt="Piloto AustroDrone" />
+              <div class="preflight-speech-bubble">
+                <b>¡Hola, piloto!</b>
+                <p>Antes de cada vuelo, recuerda estos consejos de seguridad operacional.</p>
+              </div>
+            </div>
+
+            <div class="preflight-card">
+              <div class="preflight-card-header">
+                <span class="preflight-card-icon">🛡️</span>
+                <div>
+                  <h2>Consejos de <span class="accent">seguridad operacional</span></h2>
+                  <p>Aplica estas buenas prácticas antes de despegar para una operación segura y responsable.</p>
+                </div>
+              </div>
+              <div id="safety-tips">
+                <div class="safety-tip">
+                  <span class="safety-tip-num">01</span>
+                  <span class="safety-tip-icon">📋</span>
+                  <span class="safety-tip-title">Inspección prevuelo</span>
+                  <p>Antes de despegar, realiza una inspección visual del dron: hélices, brazos, motores, sensores y cámara.</p>
+                </div>
+                <div class="safety-tip">
+                  <span class="safety-tip-num">02</span>
+                  <span class="safety-tip-icon">🌬️</span>
+                  <span class="safety-tip-title">Meteorología</span>
+                  <p>Revisa las condiciones antes de cada vuelo. El viento, la lluvia o la baja visibilidad comprometen la seguridad.</p>
+                </div>
+                <div class="safety-tip">
+                  <span class="safety-tip-num">03</span>
+                  <span class="safety-tip-icon">👥</span>
+                  <span class="safety-tip-title">Personas y terceros</span>
+                  <p>Evita sobrevolar personas o vehículos en movimiento. Mantén siempre una distancia segura.</p>
+                </div>
+                <div class="safety-tip">
+                  <span class="safety-tip-num">04</span>
+                  <span class="safety-tip-icon">🌲</span>
+                  <span class="safety-tip-title">Obstáculos</span>
+                  <p>Identifica cables eléctricos, árboles, antenas y edificios que puedan representar un riesgo.</p>
+                </div>
+              </div>
+            </div>
+          </div>
+
+          <div class="preflight-nav">
+            <button class="preflight-btn-back" data-back-to="step-aircraft" type="button">← Atrás</button>
+            <div class="preflight-tip">💡 La seguridad comienza antes del despegue. <b>Vuela responsable, vuela seguro.</b></div>
+            <button id="start-btn" class="preflight-btn-primary" type="button">Comenzar misión 🚀</button>
+          </div>
         </div>
       </div>
 
