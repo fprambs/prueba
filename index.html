@@ -281,6 +281,17 @@
         </div>
       </div>
 
+      <!-- Crash / game-over overlay — shown once the RPA hits the ground after
+           colliding with a building or tree. -->
+      <div id="crash-overlay" class="hidden">
+        <div class="crash-box panel">
+          <div class="crash-icon">💥</div>
+          <h2>¡Has chocado!</h2>
+          <p>El RPA colisionó y perdió el control. Vuelve a intentarlo desde el punto de partida.</p>
+          <button id="crash-retry-btn" type="button" class="preflight-btn-primary">🔁 Intentar de nuevo</button>
+        </div>
+      </div>
+
       <!-- DJI Mode-2 stick tutorial — opens over the start screen, doesn't touch `started`. -->
       <div id="tutorial-screen" class="hidden">
         <div id="tutorial-box">

@@ -117,6 +117,50 @@ function makeGroundTexture() {
   return tex;
 }
 
+// Helipad marker — a white disc with a yellow ring and a bold "H", used for
+// the home landing spot and every tower rooftop.
+function makeHelipadTexture() {
+  const size = 256;
+  const c = document.createElement("canvas");
+  c.width = size;
+  c.height = size;
+  const ctx = c.getContext("2d");
+  const r = size / 2;
+  ctx.clearRect(0, 0, size, size);
+  ctx.beginPath();
+  ctx.arc(r, r, r - 4, 0, Math.PI * 2);
+  ctx.fillStyle = "#eef3f6";
+  ctx.fill();
+  ctx.lineWidth = 10;
+  ctx.strokeStyle = "#ffcc33";
+  ctx.stroke();
+  ctx.fillStyle = "#0a1830";
+  ctx.font = "bold 140px sans-serif";
+  ctx.textAlign = "center";
+  ctx.textBaseline = "middle";
+  ctx.fillText("H", r, r + 8);
+  const tex = new THREE.CanvasTexture(c);
+  tex.colorSpace = THREE.SRGBColorSpace;
+  return tex;
+}
+
+const helipadTexture = makeHelipadTexture();
+const helipadMat = new THREE.MeshBasicMaterial({
+  map: helipadTexture,
+  transparent: true,
+  depthWrite: false,
+  polygonOffset: true,
+  polygonOffsetFactor: -1,
+});
+
+function addHelipad(x, y, z, size) {
+  const pad = new THREE.Mesh(new THREE.CircleGeometry(size, 24), helipadMat);
+  pad.rotation.x = -Math.PI / 2;
+  pad.position.set(x, y + 0.02, z);
+  scene.add(pad);
+  return pad;
+}
+
 const groundMat = new THREE.MeshStandardMaterial({ map: makeGroundTexture(), roughness: 1 });
 const ground = new THREE.Mesh(new THREE.PlaneGeometry(GROUND_SIZE, GROUND_SIZE, 1, 1), groundMat);
 ground.rotation.x = -Math.PI / 2;
@@ -136,7 +180,12 @@ for (let i = 0; i < 6; i++) {
   leafColor.offsetHSL(randRange(-0.04, 0.04), randRange(-0.1, 0.05), randRange(-0.08, 0.06));
   leavesMats.push(new THREE.MeshStandardMaterial({ color: leafColor, roughness: 0.9 }));
 }
-const obstacles = []; // { position: Vector3, radius }
+const obstacles = []; // { position: Vector3, radius, height, landable }
+
+// Home helipad — the game's position zero. The RPA spawns parked here and
+// crashes always send it back to this exact spot.
+const HOME_POSITION = new THREE.Vector3(0, 0, 0);
+addHelipad(HOME_POSITION.x, HOME_POSITION.y, HOME_POSITION.z, 5);
 
 function addTree(x, z) {
   const group = new THREE.Group();
@@ -154,7 +203,7 @@ function addTree(x, z) {
 
   group.position.set(x, 0, z);
   scene.add(group);
-  obstacles.push({ position: new THREE.Vector3(x, 0, z), radius: 1.6, height: trunkH + 5 });
+  obstacles.push({ position: new THREE.Vector3(x, 0, z), radius: 1.6, height: trunkH + 5, landable: false });
 }
 
 for (let i = 0; i < 140; i++) {
@@ -177,7 +226,8 @@ for (let i = 0; i < 8; i++) {
   tower.castShadow = true;
   tower.receiveShadow = true;
   scene.add(tower);
-  obstacles.push({ position: new THREE.Vector3(x, 0, z), radius: w * 0.75, height: h });
+  obstacles.push({ position: new THREE.Vector3(x, 0, z), radius: w * 0.75, height: h, landable: true });
+  addHelipad(x, h, z, w * 0.4);
 }
 
 // ---------------------------------------------------------------------------
@@ -369,6 +419,8 @@ const keys = new Set();
 let cameraMode = 0; // 0 = geográfica (chase), 1 = fpv, 2 = cinemático (follow), 3 = panorámica (tight follow)
 const cameraModes = ["Geográfica", "FPV", "Cinemático", "Panorámica"];
 let started = false;
+let crashing = false; // true while falling after a collision, before the retry overlay shows
+let gameOver = false; // true while the "Intenta nuevamente" overlay is up
 
 const gimbalWrapEl = document.getElementById("gimbal-wrap");
 
@@ -589,12 +641,26 @@ document.getElementById("start-btn").addEventListener("pointerdown", (e) => {
   clock.getDelta(); // discard the idle time spent on the preflight screens
 });
 
+document.getElementById("crash-retry-btn").addEventListener("pointerdown", (e) => {
+  e.preventDefault();
+  document.getElementById("crash-overlay").classList.add("hidden");
+  resetDrone();
+  crashing = false;
+  gameOver = false;
+  clock.getDelta(); // discard the idle time spent on the crash overlay
+});
+
 // ---------------------------------------------------------------------------
 // Flight model
 // ---------------------------------------------------------------------------
 
+const DRONE_RADIUS = 0.75;
+
+// The RPA always starts parked on the home helipad (position zero), not
+// hovering in the air — takeoff happens via the throttle stick, like a
+// real drone sitting on the ground until you lift off.
 const state = {
-  position: new THREE.Vector3(0, 6, 0),
+  position: new THREE.Vector3(HOME_POSITION.x, DRONE_RADIUS, HOME_POSITION.z),
   velocity: new THREE.Vector3(0, 0, 0),
   yaw: 0, // heading, radians — free rotation, like turning a car
   pitch: 0, // nose up/down lean, radians — bounded, like a real drone
@@ -602,8 +668,6 @@ const state = {
   yawRate: 0, // current yaw angular velocity, for smoothing
   quaternion: new THREE.Quaternion(),
 };
-
-const DRONE_RADIUS = 0.75;
 
 // Per-drone flight tuning, applied by applyDroneType() from DRONE_TYPES.
 let MAX_TILT = THREE.MathUtils.degToRad(droneConfig.maxTiltDeg); // max lean angle
@@ -644,7 +708,7 @@ function applyDroneType() {
 }
 
 function resetDrone() {
-  state.position.set(0, 6, 0);
+  state.position.set(HOME_POSITION.x, DRONE_RADIUS, HOME_POSITION.z);
   state.velocity.set(0, 0, 0);
   state.yaw = 0;
   state.pitch = 0;
@@ -657,9 +721,46 @@ function resetDrone() {
 const _fwd = new THREE.Vector3();
 const _up = new THREE.Vector3();
 
+// Crash sequence: colliding with a building or a tree cuts off normal
+// control entirely and drops the RPA by real gravity (unlike the velocity-
+// target hover model used everywhere else) until it hits the ground, then
+// hands off to the "Intenta nuevamente" overlay.
+const CRASH_GRAVITY = 18; // m/s^2
+const CRASH_SPIN = 2.6; // rad/s, purely visual tumble while falling
+
+function triggerCrash() {
+  if (crashing || gameOver) return;
+  crashing = true;
+  state.velocity.multiplyScalar(0.3);
+}
+
+function applyCrashFall(dt) {
+  state.velocity.y -= CRASH_GRAVITY * dt;
+  state.position.addScaledVector(state.velocity, dt);
+  state.roll += CRASH_SPIN * dt;
+  state.pitch += CRASH_SPIN * 0.6 * dt;
+  state.quaternion.setFromEuler(new THREE.Euler(state.pitch, state.yaw, state.roll, "YXZ"));
+  drone.position.copy(state.position);
+  drone.quaternion.copy(state.quaternion);
+
+  if (state.position.y <= DRONE_RADIUS) {
+    state.position.y = DRONE_RADIUS;
+    state.velocity.set(0, 0, 0);
+    drone.position.copy(state.position);
+    crashing = false;
+    gameOver = true;
+    document.getElementById("crash-overlay").classList.remove("hidden");
+  }
+}
+
 function updatePhysics(dt) {
   if (dt <= 0) return;
   dt = Math.min(dt, 0.05);
+
+  if (crashing) {
+    applyCrashFall(dt);
+    return;
+  }
 
   const boost = keys.has("ShiftLeft") || keys.has("ShiftRight") || touch.boost ? 1.4 : 1.0;
   const levelHold = keys.has("Space") || touch.level;
@@ -782,20 +883,30 @@ function updatePhysics(dt) {
   state.position.x = THREE.MathUtils.clamp(state.position.x, -bound, bound);
   state.position.z = THREE.MathUtils.clamp(state.position.z, -bound, bound);
 
-  // Simple obstacle collision (cylinders): push the drone out & kill velocity into it.
+  // Obstacle collision: towers have a landable rooftop (same rest/support
+  // behavior as the ground, just elevated), trees don't — any contact with
+  // a tree, or with a tower's body below roof level, ends the flight.
   for (const obs of obstacles) {
     const dx = state.position.x - obs.position.x;
     const dz = state.position.z - obs.position.z;
     const distXZ = Math.hypot(dx, dz);
-    const minDist = obs.radius + DRONE_RADIUS;
-    if (distXZ < minDist && state.position.y < obs.height + 1) {
-      const push = (minDist - distXZ) || 0.001;
-      const nx = dx / (distXZ || 1);
-      const nz = dz / (distXZ || 1);
-      state.position.x += nx * push;
-      state.position.z += nz * push;
-      state.velocity.x *= 0.3;
-      state.velocity.z *= 0.3;
+    if (distXZ >= obs.radius + DRONE_RADIUS) continue;
+
+    if (obs.landable && state.position.y >= obs.height) {
+      // Mirrors the ground check exactly (same thin threshold, same damping)
+      // just elevated to roof height — only pushes back up while still
+      // sinking *into* the roof, never while already resting on or climbing
+      // away from it, so takeoff isn't fought by this every frame.
+      const roofY = obs.height + DRONE_RADIUS;
+      if (state.position.y < roofY) {
+        state.position.y = roofY;
+        state.velocity.y = Math.max(0, -state.velocity.y * 0.15);
+        state.velocity.x *= 0.9;
+        state.velocity.z *= 0.9;
+      }
+    } else if (state.position.y < obs.height + 0.5) {
+      triggerCrash();
+      break;
     }
   }
 
@@ -1341,7 +1452,7 @@ function animate() {
   requestAnimationFrame(animate);
   const dt = clock.getDelta();
 
-  if (started) {
+  if (started && !gameOver) {
     updatePhysics(dt);
     updateGates();
   }

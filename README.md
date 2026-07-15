@@ -36,7 +36,9 @@ Antes de entrar al simulador, la app muestra 3 pantallas de marca AustroDrone: *
 - 3 aeronaves seleccionables (EXP PLAY, INSPECTOR PRO, AGRI SPRAY X8), cada una con su propio preset de vuelo, batería y alcance.
 - Cuatro modos de cámara: Geográfica (persecución en tercera persona), FPV (montada en el morro del dron, con gimbal inclinable), Cinemático (seguimiento con retraso suave y amortiguado) y Panorámica (seguimiento amplio y ágil que siempre mantiene el dron completo en cuadro). Las transiciones entre cámaras se mezclan suavemente.
 - HUD de desempeño: batería y alcance restantes en tiempo real, calculados con las especificaciones reales de la aeronave seleccionada.
-- Mundo con terreno, árboles y torres como obstáculos con colisión básica.
+- La partida arranca con el RPA posado en el helipuerto del punto de partida (posición cero); despegar es cuestión de subir el gas.
+- Chocar contra un árbol o el cuerpo de un edificio hace caer al RPA y termina la partida con una pantalla de "Intenta nuevamente" que reinicia todo desde el punto de partida (batería y alcance incluidos).
+- Los techos de los edificios son superficies de aterrizaje — cada uno tiene su propio helipuerto — y el RPA puede posarse y volver a despegar tanto ahí como en el suelo.
 - Aros amarillos para atravesar y sumar puntos, que se reposicionan aleatoriamente tras pasarlos.
 - HUD con altitud, velocidad, rumbo, batería, alcance y contador de puertas superadas.
 

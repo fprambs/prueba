@@ -732,6 +732,52 @@ body.touch-device #hud-bottom {
 }
 
 /* ---------------------------------------------------------------------
+   Crash / game-over overlay — same dark panel language as the rest of
+   the HUD, shown once the RPA lands after a collision fall.
+   --------------------------------------------------------------------- */
+
+#crash-overlay {
+  position: fixed;
+  inset: 0;
+  z-index: 12;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  background: rgba(3, 8, 14, 0.75);
+  pointer-events: all;
+}
+
+.crash-box {
+  position: static;
+  width: min(90vw, 420px);
+  padding: 28px 32px;
+  text-align: center;
+}
+
+.crash-icon {
+  font-size: 42px;
+  margin-bottom: 6px;
+}
+
+.crash-box h2 {
+  margin: 0 0 10px;
+  font-size: 22px;
+  font-weight: 800;
+  color: #ffffff;
+}
+
+.crash-box p {
+  margin: 0 0 20px;
+  font-size: 14px;
+  color: #b7e7ee;
+  line-height: 1.5;
+}
+
+.crash-box .preflight-btn-primary {
+  width: 100%;
+}
+
+/* ---------------------------------------------------------------------
    DJI Mode-2 stick tutorial — navy/white/sky-blue instrument look,
    layered above the start screen (same overlay pattern, higher z-index).
    --------------------------------------------------------------------- */
