@@ -528,10 +528,7 @@ setupJoystick(document.getElementById("joystick-left"), document.querySelector("
   touch.throttle = y;
 });
 setupJoystick(document.getElementById("joystick-right"), document.querySelector("#joystick-right .joystick-knob"), (x, y) => {
-  // Negated: with this quaternion convention (roll = Euler Z), a positive
-  // state.roll leans the drone's up vector toward -X, so the stick's screen-
-  // right deflection must map to a *negative* roll to bank/move it right.
-  touch.roll = -x;
+  touch.roll = x;
   touch.pitch = y;
 });
 
@@ -612,30 +609,40 @@ document.querySelectorAll(".preflight-btn-back").forEach((el) => {
   });
 });
 
-// Best-effort landscape lock: only Android Chrome supports a real
-// screen.orientation.lock(), and only while the page is fullscreen — iOS
-// Safari supports neither API at all. Both calls are feature-detected and
-// swallowed on failure; the CSS #rotate-overlay is what actually guarantees
-// landscape everywhere else, so this is pure progressive enhancement and
-// must never delay or block the existing start-up lines below.
-function tryLockLandscape() {
+// The simulator always launches in fullscreen — on touch devices this also
+// tries a real landscape lock (only Android Chrome supports
+// screen.orientation.lock(), and only while fullscreen; iOS Safari supports
+// neither API at all). Both calls are feature-detected and swallowed on
+// failure; the CSS #rotate-overlay is what actually guarantees landscape
+// everywhere else, so the lock is pure progressive enhancement and must
+// never delay or block the existing start-up lines below.
+function enterFullscreen() {
   const el = document.documentElement;
   if (el.requestFullscreen) {
     el.requestFullscreen()
       .then(() => {
-        if (screen.orientation && screen.orientation.lock) {
+        if (isTouchDevice && screen.orientation && screen.orientation.lock) {
           screen.orientation.lock("landscape").catch(() => {});
         }
       })
       .catch(() => {});
-  } else if (screen.orientation && screen.orientation.lock) {
+  } else if (isTouchDevice && screen.orientation && screen.orientation.lock) {
     screen.orientation.lock("landscape").catch(() => {});
   }
 }
 
+const exitFullscreenBtn = document.getElementById("exit-fullscreen-btn");
+document.addEventListener("fullscreenchange", () => {
+  exitFullscreenBtn.classList.toggle("hidden", !document.fullscreenElement);
+});
+exitFullscreenBtn.addEventListener("pointerdown", (e) => {
+  e.preventDefault();
+  if (document.fullscreenElement) document.exitFullscreen();
+});
+
 document.getElementById("start-btn").addEventListener("pointerdown", (e) => {
   e.preventDefault();
-  if (isTouchDevice) tryLockLandscape();
+  enterFullscreen();
   document.getElementById("preflight").classList.add("hidden");
   started = true;
   clock.getDelta(); // discard the idle time spent on the preflight screens
@@ -778,7 +785,7 @@ function updatePhysics(dt) {
     1
   );
   let rollInput = THREE.MathUtils.clamp(
-    (keys.has("ArrowLeft") ? 1 : 0) - (keys.has("ArrowRight") ? 1 : 0) + touch.roll,
+    (keys.has("ArrowRight") ? 1 : 0) - (keys.has("ArrowLeft") ? 1 : 0) + touch.roll,
     -1,
     1
   );
