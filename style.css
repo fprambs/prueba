@@ -9,7 +9,7 @@ html, body {
   height: 100%;
   overflow: hidden;
   background: #0a0e17;
-  font-family: "Segoe UI", Roboto, -apple-system, BlinkMacSystemFont, sans-serif;
+  font-family: "Ubuntu", "Segoe UI", Roboto, -apple-system, BlinkMacSystemFont, sans-serif;
   color: #eafcff;
 }
 
@@ -38,43 +38,63 @@ html, body {
   box-shadow: 0 0 18px rgba(0, 0, 0, 0.35);
 }
 
+/* Superior izquierda — minimalista: salir de pantalla completa + batería. */
 #hud-top-left {
   top: 16px;
   left: max(16px, env(safe-area-inset-left, 0px));
-  min-width: 180px;
-}
-
-#hud-top-right {
-  top: 64px;
-  right: max(16px, env(safe-area-inset-right, 0px));
-  min-width: 180px;
-  text-align: right;
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  padding: 8px 12px;
 }
 
 #exit-fullscreen-btn {
-  position: absolute;
-  top: 16px;
-  right: max(16px, env(safe-area-inset-right, 0px));
-  width: 40px;
-  height: 40px;
+  width: 26px;
+  height: 26px;
   border-radius: 50%;
-  background: rgba(10, 16, 22, 0.55);
-  border: 1px solid rgba(234, 252, 255, 0.2);
+  background: rgba(255, 255, 255, 0.06);
+  border: 1px solid rgba(234, 252, 255, 0.25);
   color: rgba(234, 252, 255, 0.9);
-  font-size: 18px;
   display: flex;
   align-items: center;
   justify-content: center;
   cursor: pointer;
   pointer-events: all;
   touch-action: manipulation;
+  flex-shrink: 0;
+  padding: 0;
   transition: background 0.15s ease, border-color 0.15s ease;
+}
+
+#exit-fullscreen-btn svg {
+  width: 15px;
+  height: 15px;
 }
 
 #exit-fullscreen-btn:hover,
 #exit-fullscreen-btn:active {
   background: rgba(51, 209, 255, 0.3);
   border-color: rgba(51, 209, 255, 0.6);
+}
+
+#hud-battery-wrap {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+}
+
+#hud-battery-wrap svg {
+  width: 22px;
+  height: 22px;
+  color: #7fd8e8;
+  flex-shrink: 0;
+}
+
+#hud-top-right {
+  top: 16px;
+  right: max(16px, env(safe-area-inset-right, 0px));
+  min-width: 180px;
+  text-align: right;
 }
 
 .row {
@@ -101,18 +121,42 @@ html, body {
   position: absolute;
   top: 50%;
   left: 50%;
-  width: 260px;
-  height: 180px;
-  margin: -90px 0 0 -130px;
+  width: 156px;
+  height: 108px;
+  margin: -54px 0 0 -78px;
   pointer-events: none;
 }
 
-#hud-bottom {
+/* Inferior — barra flotante de telemetría: ALT · VEL · ALCANCE. */
+#hud-telemetry {
   bottom: 16px;
   left: 50%;
   transform: translateX(-50%);
-  font-size: 13px;
+  display: flex;
+  align-items: center;
+  gap: 16px;
+  padding: 10px 20px;
+}
+
+.telemetry-item {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  font-size: 14px;
   white-space: nowrap;
+}
+
+.telemetry-item svg {
+  width: 18px;
+  height: 18px;
+  color: #7fd8e8;
+  flex-shrink: 0;
+}
+
+.telemetry-sep {
+  width: 1px;
+  height: 20px;
+  background: rgba(90, 230, 255, 0.25);
 }
 
 /* FPV gimbal tilt slider — only visible while Cam 2 (FPV) is active.
@@ -144,6 +188,13 @@ body.touch-device #gimbal-wrap {
   letter-spacing: 1px;
   color: #7fd8e8;
   font-weight: 700;
+}
+
+#gimbal-angle {
+  font-size: 11px;
+  font-weight: 700;
+  color: #eafcff;
+  font-variant-numeric: tabular-nums;
 }
 
 #gimbal-track {
@@ -181,10 +232,6 @@ body.touch-device #gimbal-wrap {
 
 body.touch-device #touch-controls {
   display: block;
-}
-
-body.touch-device #hud-bottom {
-  display: none;
 }
 
 /* DJI Fly-style virtual sticks: a quiet translucent disc at rest, a thin
@@ -295,235 +342,173 @@ body.touch-device #hud-bottom {
 }
 
 /* ---------------------------------------------------------------------
-   Preflight flow — 3 branded steps (bienvenida / aeronave / seguridad)
-   shown before the simulator starts. Same navy/cyan HUD palette as the
-   rest of the app, just at a bigger, editorial scale.
+   Preflight flow — 3 branded steps (bienvenida / aeronave / seguridad),
+   each rendered as the official 2D screen artwork at its native aspect
+   ratio, letterboxed to fit any viewport without distortion. The only
+   HTML on top are functional hit-zones/buttons positioned to match the
+   artwork's own drawn buttons — nothing is redrawn or recreated.
    --------------------------------------------------------------------- */
 
 #preflight {
   position: fixed;
   inset: 0;
-  display: flex;
-  flex-direction: column;
-  padding: 20px 28px;
-  gap: 14px;
-  background: radial-gradient(ellipse at top right, rgba(20, 45, 70, 0.55), rgba(4, 8, 14, 0.97));
-  pointer-events: all;
   z-index: 10;
-  color: #eafcff;
+  pointer-events: all;
+  background: #000;
 }
 
 .preflight-step {
-  display: flex;
-  flex-direction: column;
-  flex: 1;
-  min-height: 0;
-  gap: 14px;
-}
-
-.preflight-topbar {
-  display: flex;
-  align-items: center;
-  gap: 10px;
-  flex-shrink: 0;
-}
-
-#brand-mark,
-.brand-mark-sm {
-  width: 30px;
-  height: 30px;
-  flex-shrink: 0;
-}
-
-.preflight-brand-name {
-  font-size: 18px;
-  font-weight: 800;
-  letter-spacing: 1px;
-  text-transform: uppercase;
-}
-
-.preflight-body {
-  display: flex;
-  flex: 1;
-  min-height: 0;
-  gap: 20px;
-}
-
-.preflight-card {
-  flex: 1;
-  min-width: 0;
-  background: rgba(8, 18, 28, 0.82);
-  border: 1px solid rgba(90, 230, 255, 0.35);
-  border-radius: 16px;
-  padding: 20px 26px;
-  box-shadow: 0 0 40px rgba(0, 0, 0, 0.45);
-  overflow-y: auto;
   position: relative;
+  width: 100%;
+  height: 100%;
 }
 
-.preflight-card h1,
-.preflight-card h2 {
-  margin: 0 0 8px;
-  font-weight: 800;
-  color: #ffffff;
-  line-height: 1.25;
+/* Width/height are set in px by sizeScreenFrames() in main.js, computed
+   from each screen's native aspect ratio (data-ratio) so the artwork is
+   always letterboxed without distortion; max-width/max-height are just a
+   pre-JS safety net against overflow on first paint. */
+.screen-frame {
+  position: absolute;
+  inset: 0;
+  margin: auto;
+  max-width: 100%;
+  max-height: 100%;
+  background-repeat: no-repeat;
+  background-position: center;
+  background-size: 100% 100%;
 }
 
-.preflight-card h1 {
-  font-size: 26px;
-  max-width: 80%;
-}
-
-.preflight-card h2 {
-  font-size: 22px;
-}
-
-.preflight-card p {
-  color: #b7e7ee;
-  font-size: 14px;
-  line-height: 1.6;
-  margin: 0 0 16px;
-}
-
-.preflight-card .accent {
-  color: #33d1ff;
-}
-
-.preflight-card-header {
-  display: flex;
-  align-items: flex-start;
-  gap: 14px;
-  margin-bottom: 16px;
-}
-
-.preflight-card-icon {
-  flex-shrink: 0;
-  width: 44px;
-  height: 44px;
+/* Invisible hit-zones aligned exactly over the buttons already drawn in
+   the artwork — a subtle hover/active highlight is the only thing this
+   layer ever adds, so mouse/keyboard users still get affordance without
+   any duplicated text or icons on top of the image. */
+.screen-btn {
+  position: absolute;
+  border: none;
+  border-radius: 10px;
+  background: transparent;
+  color: transparent;
+  cursor: pointer;
+  padding: 0;
+  touch-action: manipulation;
   display: flex;
   align-items: center;
   justify-content: center;
-  font-size: 22px;
-  background: rgba(51, 209, 255, 0.14);
-  border: 1px solid rgba(90, 230, 255, 0.35);
-  border-radius: 12px;
+  gap: 6px;
 }
 
-.preflight-card-header h2,
-.preflight-card-header p {
-  margin: 0;
-}
-
-/* Pilot photo panel — used on the aircraft & safety steps, with a speech
-   bubble; the welcome step reuses it without one. Edges are softly masked
-   so the mockup crop blends into the panel instead of showing hard edges. */
-
-.preflight-pilot-panel {
-  position: relative;
-  flex: 0 0 260px;
-  border-radius: 16px;
-  overflow: hidden;
-  background: rgba(8, 18, 28, 0.6);
-  border: 1px solid rgba(90, 230, 255, 0.25);
-}
-
-.preflight-pilot-photo {
-  width: 100%;
-  height: 100%;
-  object-fit: cover;
-  object-position: top center;
-  display: block;
-  -webkit-mask-image: linear-gradient(to bottom, black 82%, transparent 100%);
-  mask-image: linear-gradient(to bottom, black 82%, transparent 100%);
-}
-
-.preflight-speech-bubble {
-  position: absolute;
-  top: 16px;
-  left: 16px;
-  right: 16px;
-  background: rgba(6, 14, 22, 0.88);
-  border: 1px solid rgba(90, 230, 255, 0.4);
-  border-radius: 12px;
-  padding: 10px 14px;
-  font-size: 12px;
-  box-shadow: 0 0 20px rgba(0, 0, 0, 0.4);
-}
-
-.preflight-speech-bubble b {
-  color: #33d1ff;
-}
-
-.preflight-speech-bubble p {
-  margin: 4px 0 0;
-  color: #dff7ff;
-  font-size: 12px;
-  line-height: 1.45;
-}
-
-/* Bottom nav bar — back / safety tip / primary CTA, shared by all 3 steps. */
-
-.preflight-nav {
-  display: flex;
-  align-items: stretch;
-  gap: 14px;
+.screen-btn svg {
+  width: 1.3em;
+  height: 1.3em;
   flex-shrink: 0;
 }
 
-.preflight-nav-spacer {
-  flex: 1;
+.screen-btn:hover,
+.screen-btn:focus-visible {
+  background: rgba(255, 255, 255, 0.08);
+  box-shadow: 0 0 0 2px rgba(51, 209, 255, 0.5) inset;
 }
 
-.preflight-btn-back,
-.preflight-tip,
-.preflight-btn-primary {
-  border-radius: 12px;
-  border: 1px solid rgba(90, 230, 255, 0.3);
-  padding: 12px 20px;
-  font-size: 13px;
+.screen-btn:active {
+  background: rgba(51, 209, 255, 0.18);
 }
 
-.preflight-btn-back {
-  flex: 0 0 auto;
-  min-width: 120px;
-  background: rgba(255, 255, 255, 0.06);
+.aircraft-hit-zone {
+  position: absolute;
+  border: none;
+  background: transparent;
+  cursor: pointer;
+  padding: 0;
+  border-radius: 14px;
+  touch-action: manipulation;
+}
+
+button.aircraft-hit-zone:hover,
+button.aircraft-hit-zone:focus-visible {
+  box-shadow: 0 0 0 2px rgba(51, 209, 255, 0.6) inset;
+}
+
+.aircraft-locked {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 10px;
+  text-align: center;
+  padding: 16px;
+  background: rgba(4, 8, 14, 0.72);
   color: #eafcff;
+  font-size: clamp(10px, 1.3vw, 13px);
   font-weight: 700;
+  line-height: 1.4;
+  transition: background 0.15s ease;
+}
+
+.aircraft-locked svg {
+  width: 15%;
+  min-width: 24px;
+  max-width: 40px;
+  height: auto;
+  color: #7fd8e8;
+}
+
+.aircraft-locked:hover {
+  background: rgba(4, 8, 14, 0.85);
+}
+
+/* Tutorial trigger — the only genuinely new button on the welcome screen
+   (it isn't drawn in the artwork), so it gets real visible chrome
+   matching the rest of the HUD's panel language. */
+#tutorial-btn {
+  position: absolute;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 8px;
+  background: rgba(6, 14, 22, 0.7);
+  border: 1px solid rgba(90, 230, 255, 0.35);
+  border-radius: 10px;
+  color: #eafcff;
+  font-family: inherit;
+  font-weight: 700;
+  font-size: clamp(11px, 1.5vw, 14px);
   cursor: pointer;
   touch-action: manipulation;
   transition: background 0.15s ease, border-color 0.15s ease;
 }
 
-.preflight-btn-back:active {
+#tutorial-btn svg {
+  width: 1.2em;
+  height: 1.2em;
+  flex-shrink: 0;
+}
+
+#tutorial-btn:hover,
+#tutorial-btn:active {
   background: rgba(51, 209, 255, 0.18);
   border-color: #33d1ff;
 }
 
-.preflight-tip {
-  flex: 1;
+.preflight-btn-primary {
   display: flex;
   align-items: center;
   justify-content: center;
-  gap: 6px;
-  background: rgba(8, 18, 28, 0.75);
-  color: #9fe8f5;
-  text-align: center;
-}
-
-.preflight-tip b {
-  color: #eafcff;
-}
-
-.preflight-btn-primary {
-  flex: 0 0 auto;
-  min-width: 190px;
+  gap: 8px;
+  padding: 12px 20px;
   background: linear-gradient(135deg, #7fffcf, #33d1ff);
   border: none;
+  border-radius: 10px;
   color: #04141a;
   font-weight: 800;
+  font-size: 14px;
   cursor: pointer;
   touch-action: manipulation;
   transition: transform 0.1s ease;
+}
+
+.preflight-btn-primary svg {
+  width: 1.2em;
+  height: 1.2em;
 }
 
 .preflight-btn-primary:hover {
@@ -534,227 +519,32 @@ body.touch-device #hud-bottom {
   transform: translateY(0);
 }
 
-/* Step 1 — Bienvenida */
-
-.preflight-welcome-card {
-  padding-top: 24px;
-}
-
-#hero-drone {
-  float: right;
-  width: 150px;
-  border-radius: 12px;
-  margin: -4px 0 10px 14px;
-  box-shadow: 0 0 24px rgba(51, 209, 255, 0.25);
-}
-
-.preflight-eyebrow {
-  font-size: 12px;
-  font-weight: 700;
-  letter-spacing: 1.5px;
-  text-transform: uppercase;
-  color: #7fd8e8;
-  margin-bottom: 4px;
-}
-
-#welcome-features {
-  display: grid;
-  grid-template-columns: repeat(4, 1fr);
-  gap: 14px;
-  margin: 6px 0 16px;
-  clear: both;
-}
-
-.welcome-feature {
+/* Toast informativo (p.ej. aeronave bloqueada en la versión de prueba). */
+#toast {
+  position: absolute;
+  bottom: 90px;
+  left: 50%;
+  transform: translateX(-50%);
   display: flex;
-  flex-direction: column;
-  gap: 4px;
-}
-
-.welcome-feature-icon {
-  font-size: 20px;
-}
-
-.welcome-feature-title {
-  font-size: 12px;
-  font-weight: 700;
-  color: #7fd8e8;
-}
-
-.welcome-feature-desc {
-  font-size: 11px;
-  color: rgba(234, 252, 255, 0.65);
-  line-height: 1.4;
-}
-
-#controls-details {
-  border-top: 1px solid rgba(90, 230, 255, 0.2);
-  padding-top: 12px;
-}
-
-#controls-details summary {
-  cursor: pointer;
-  font-size: 13px;
-  font-weight: 700;
-  color: #7fd8e8;
-  touch-action: manipulation;
-}
-
-#controls-details ul {
-  list-style: none;
-  padding: 0;
-  margin: 12px 0;
-  font-size: 13px;
-  line-height: 1.8;
-}
-
-#controls-details li b {
-  color: #7fd8e8;
-  display: inline-block;
-  min-width: 90px;
-}
-
-#tutorial-btn {
-  display: block;
-  padding: 10px 20px;
-  font-size: 13px;
-  font-weight: 700;
-  color: #eafcff;
-  background: rgba(255, 255, 255, 0.06);
-  border: 1px solid rgba(90, 230, 255, 0.3);
-  border-radius: 10px;
-  cursor: pointer;
-  touch-action: manipulation;
-  transition: background 0.15s ease, border-color 0.15s ease;
-}
-
-#tutorial-btn:active {
-  background: rgba(51, 209, 255, 0.18);
-  border-color: #33d1ff;
-}
-
-/* Step 2 — Selecciona tu aeronave */
-
-#aircraft-options {
-  display: flex;
-  gap: 14px;
-  flex-wrap: wrap;
-}
-
-.aircraft-option {
-  flex: 1;
-  min-width: 200px;
-  display: flex;
-  flex-direction: column;
-  text-align: left;
-  padding: 14px;
-  background: rgba(255, 255, 255, 0.04);
-  border: 1px solid rgba(90, 230, 255, 0.25);
-  border-radius: 14px;
-  color: #eafcff;
-  font-family: inherit;
-  cursor: pointer;
-  touch-action: manipulation;
-  transition: background 0.15s ease, border-color 0.15s ease, box-shadow 0.15s ease;
-}
-
-.aircraft-option.selected {
-  background: rgba(51, 209, 255, 0.12);
-  border-color: #33d1ff;
-  box-shadow: 0 0 16px rgba(51, 209, 255, 0.3);
-}
-
-.aircraft-option-category {
-  font-size: 11px;
-  font-weight: 700;
-  color: #7fd8e8;
-  margin-bottom: 8px;
-}
-
-.aircraft-option-photo {
-  width: 100%;
-  aspect-ratio: 16 / 11;
-  object-fit: contain;
-  background: radial-gradient(ellipse at center, rgba(51, 209, 255, 0.12), transparent 70%);
-  border-radius: 10px;
-  margin-bottom: 8px;
-}
-
-.aircraft-option-name {
-  font-size: 16px;
-  font-weight: 800;
-  margin-bottom: 8px;
-}
-
-.aircraft-option-specs {
-  list-style: none;
-  padding: 0;
-  margin: 0 0 10px;
-  font-size: 11px;
-  line-height: 1.7;
-  color: rgba(234, 252, 255, 0.8);
-}
-
-.aircraft-option-specs li::before {
-  content: "✓ ";
-  color: #33d1ff;
-  font-weight: 700;
-}
-
-.aircraft-option-footer {
-  display: flex;
-  justify-content: space-between;
+  align-items: center;
   gap: 8px;
-  font-size: 11px;
-  color: #9fe8f5;
-  border-top: 1px solid rgba(90, 230, 255, 0.2);
-  padding-top: 8px;
-  margin-top: auto;
-}
-
-/* Step 3 — Consejos de seguridad */
-
-#safety-tips {
-  display: flex;
-  gap: 12px;
-  flex-wrap: wrap;
-}
-
-.safety-tip {
-  flex: 1;
-  min-width: 150px;
-  display: flex;
-  flex-direction: column;
-  gap: 4px;
-  background: rgba(255, 255, 255, 0.04);
-  border: 1px solid rgba(90, 230, 255, 0.2);
+  background: rgba(6, 14, 22, 0.92);
+  border: 1px solid rgba(90, 230, 255, 0.4);
   border-radius: 12px;
-  padding: 12px 14px;
+  padding: 12px 22px;
+  font-size: 14px;
+  font-weight: 700;
+  box-shadow: 0 0 30px rgba(0, 0, 0, 0.5);
+  z-index: 20;
+  pointer-events: none;
+  white-space: nowrap;
 }
 
-.safety-tip-num {
-  font-size: 11px;
-  font-weight: 800;
-  color: #33d1ff;
-}
-
-.safety-tip-icon {
-  font-size: 22px;
-  margin-bottom: 2px;
-}
-
-.safety-tip-title {
-  font-size: 13px;
-  font-weight: 800;
-  color: #ffffff;
-  margin-bottom: 2px;
-}
-
-.safety-tip p {
-  font-size: 11px;
-  color: rgba(234, 252, 255, 0.7);
-  line-height: 1.5;
-  margin: 0;
+#toast svg {
+  width: 16px;
+  height: 16px;
+  flex-shrink: 0;
+  color: #7fd8e8;
 }
 
 /* ---------------------------------------------------------------------
@@ -781,8 +571,13 @@ body.touch-device #hud-bottom {
 }
 
 .crash-icon {
-  font-size: 42px;
   margin-bottom: 6px;
+  color: #ff6b5e;
+}
+
+.crash-icon svg {
+  width: 42px;
+  height: 42px;
 }
 
 .crash-box h2 {
@@ -847,13 +642,20 @@ body.touch-device #hud-bottom {
   right: 14px;
   width: 32px;
   height: 32px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
   border-radius: 50%;
   border: 1px solid rgba(234, 252, 255, 0.3);
   background: rgba(255, 255, 255, 0.06);
   color: #eafcff;
-  font-size: 15px;
   cursor: pointer;
   touch-action: manipulation;
+}
+
+#tutorial-close svg {
+  width: 15px;
+  height: 15px;
 }
 
 #tutorial-stage {
@@ -1099,111 +901,18 @@ body.touch-device #hud-bottom {
    --------------------------------------------------------------------- */
 
 @media (max-height: 420px) {
-  #preflight {
-    padding: 10px 16px;
-    gap: 8px;
-  }
-
-  .preflight-step {
-    gap: 8px;
-  }
-
-  #brand-mark,
-  .brand-mark-sm {
-    width: 20px;
-    height: 20px;
-  }
-
-  .preflight-brand-name {
-    font-size: 14px;
-  }
-
-  .preflight-pilot-panel {
-    display: none;
-  }
-
-  .preflight-card {
-    padding: 10px 16px;
-  }
-
-  .preflight-card h1 {
-    font-size: 17px;
-    max-width: 100%;
-  }
-
-  .preflight-card h2 {
-    font-size: 15px;
-  }
-
-  .preflight-card p {
-    font-size: 11px;
-    margin-bottom: 8px;
-  }
-
-  .preflight-card-icon {
-    width: 32px;
-    height: 32px;
-    font-size: 16px;
-  }
-
-  #hero-drone {
-    width: 90px;
-    margin: -4px 0 6px 10px;
-  }
-
-  #welcome-features {
-    gap: 8px;
-    margin: 4px 0 10px;
-  }
-
-  .welcome-feature-desc {
-    display: none;
-  }
-
-  #controls-details {
-    padding-top: 6px;
-  }
-
-  .aircraft-option {
-    padding: 8px;
-    min-width: 140px;
-  }
-
-  .aircraft-option-photo {
-    aspect-ratio: 16 / 8;
-    margin-bottom: 4px;
-  }
-
-  .aircraft-option-specs li:nth-child(n + 2) {
-    display: none;
-  }
-
-  .safety-tip p {
-    display: none;
-  }
-
-  .preflight-nav {
-    gap: 8px;
-  }
-
-  .preflight-btn-back,
-  .preflight-tip,
   .preflight-btn-primary {
     padding: 8px 12px;
     font-size: 11px;
-  }
-
-  .preflight-btn-back,
-  .preflight-btn-primary {
     min-width: auto;
   }
 
   #hud-attitude {
     top: 8px;
     left: 50%;
-    width: 180px;
-    height: 120px;
-    margin: 0 0 0 -90px;
+    width: 108px;
+    height: 72px;
+    margin: 0 0 0 -54px;
   }
 
   #gimbal-track {
@@ -1211,13 +920,13 @@ body.touch-device #hud-bottom {
   }
 
   #exit-fullscreen-btn {
-    width: 32px;
-    height: 32px;
-    font-size: 15px;
+    width: 22px;
+    height: 22px;
   }
 
-  #hud-top-right {
-    top: 50px;
+  #exit-fullscreen-btn svg {
+    width: 13px;
+    height: 13px;
   }
 
   #touch-buttons {
@@ -1248,7 +957,11 @@ body.touch-device #hud-bottom {
     height: 26px;
     top: 8px;
     right: 8px;
-    font-size: 12px;
+  }
+
+  #tutorial-close svg {
+    width: 12px;
+    height: 12px;
   }
 
   #tutorial-stage {

@@ -90,6 +90,19 @@ function randRange(min, max) {
   return min + Math.random() * (max - min);
 }
 
+// Reused scratch vectors so per-frame collision checks against power-line
+// segments don't allocate.
+const _segAB = new THREE.Vector3();
+const _segAP = new THREE.Vector3();
+const _segClosest = new THREE.Vector3();
+function distPointToSegment(p, a, b) {
+  _segAB.subVectors(b, a);
+  _segAP.subVectors(p, a);
+  const t = THREE.MathUtils.clamp(_segAP.dot(_segAB) / _segAB.lengthSq(), 0, 1);
+  _segClosest.copy(a).addScaledVector(_segAB, t);
+  return p.distanceTo(_segClosest);
+}
+
 // Procedural tileable grass-variation texture — a mottled fill instead of a
 // flat color, generated once on a small canvas (no external image assets).
 function makeGroundTexture() {
@@ -206,28 +219,151 @@ function addTree(x, z) {
   obstacles.push({ position: new THREE.Vector3(x, 0, z), radius: 1.6, height: trunkH + 5, landable: false });
 }
 
-for (let i = 0; i < 140; i++) {
-  const x = randRange(-450, 450);
-  const z = randRange(-450, 450);
-  if (Math.hypot(x, z) < 25) continue; // keep spawn area clear
-  addTree(x, z);
+// Trees are grouped into forest zones of varying size/density rather than
+// scattered uniformly — each zone keeps a central glade clear (a natural
+// clearing/path) instead of packing trees edge-to-edge.
+const FOREST_ZONE_COUNT = 7;
+for (let i = 0; i < FOREST_ZONE_COUNT; i++) {
+  let cx, cz;
+  do {
+    cx = randRange(-430, 430);
+    cz = randRange(-430, 430);
+  } while (Math.hypot(cx, cz) < 65);
+  const radius = randRange(40, 100);
+  const density = randRange(0.35, 1);
+  const clearingRadius = radius * randRange(0.15, 0.3);
+  const count = Math.round(45 * density);
+  for (let t = 0; t < count; t++) {
+    const angle = randRange(0, Math.PI * 2);
+    const r = Math.sqrt(Math.random()) * radius; // uniform disk sampling
+    const x = cx + Math.cos(angle) * r;
+    const z = cz + Math.sin(angle) * r;
+    if (Math.hypot(x, z) < 25) continue; // keep spawn area clear
+    if (r < clearingRadius) continue; // leave the zone's glade open
+    addTree(x, z);
+  }
 }
 
-// A handful of tower blocks to fly around / near.
+// Towers cluster into a handful of small urban zones instead of standing
+// alone — each zone places 3-6 towers with a minimum spacing so they read
+// as a rooftop cluster to fly between, not isolated pillars.
 const towerMat = new THREE.MeshStandardMaterial({ color: 0x9aa7b0, roughness: 0.7 });
-for (let i = 0; i < 8; i++) {
-  const w = randRange(6, 12);
-  const h = randRange(20, 55);
-  const x = randRange(-350, 350);
-  const z = randRange(-350, 350);
-  if (Math.hypot(x, z) < 60) continue;
-  const tower = new THREE.Mesh(new THREE.BoxGeometry(w, h, w), towerMat);
-  tower.position.set(x, h / 2, z);
-  tower.castShadow = true;
-  tower.receiveShadow = true;
-  scene.add(tower);
-  obstacles.push({ position: new THREE.Vector3(x, 0, z), radius: w * 0.75, height: h, landable: true });
-  addHelipad(x, h, z, w * 0.4);
+const URBAN_ZONE_COUNT = 4;
+for (let u = 0; u < URBAN_ZONE_COUNT; u++) {
+  let cx, cz;
+  do {
+    cx = randRange(-370, 370);
+    cz = randRange(-370, 370);
+  } while (Math.hypot(cx, cz) < 90);
+
+  const clusterSize = 3 + Math.floor(Math.random() * 4); // 3-6 towers
+  const placed = [];
+  for (let i = 0; i < clusterSize; i++) {
+    const w = randRange(6, 12);
+    let x, z, tries = 0;
+    do {
+      const angle = randRange(0, Math.PI * 2);
+      const r = randRange(0, 32);
+      x = cx + Math.cos(angle) * r;
+      z = cz + Math.sin(angle) * r;
+      tries++;
+    } while (placed.some((p) => Math.hypot(p.x - x, p.z - z) < (p.w + w) * 0.55 + 4) && tries < 12);
+    placed.push({ x, z, w });
+
+    const h = randRange(20, 55);
+    const tower = new THREE.Mesh(new THREE.BoxGeometry(w, h, w), towerMat);
+    tower.position.set(x, h / 2, z);
+    tower.castShadow = true;
+    tower.receiveShadow = true;
+    scene.add(tower);
+    obstacles.push({ position: new THREE.Vector3(x, 0, z), radius: w * 0.75, height: h, landable: true });
+    addHelipad(x, h, z, w * 0.4);
+  }
+}
+
+// ---------------------------------------------------------------------------
+// High-tension power lines — corridors of poles linked by sagging cables.
+// Real collision: any contact with a cable span ends the flight exactly
+// like a tree (no landable surface), tracked as sampled polyline segments
+// rather than the cylinder-obstacle model used for trees/towers.
+// ---------------------------------------------------------------------------
+
+const POLE_HEIGHT = 20;
+const POWERLINE_HIT_RADIUS = 0.55;
+const poleMat = new THREE.MeshStandardMaterial({ color: 0x6e7176, roughness: 0.55, metalness: 0.35 });
+const cableMat = new THREE.MeshStandardMaterial({ color: 0x14161a, roughness: 0.4, metalness: 0.6 });
+const powerLineSpans = []; // arrays of sampled Vector3 points along each cable span
+
+function addPole(x, z) {
+  const pole = new THREE.Mesh(new THREE.CylinderGeometry(0.32, 0.45, POLE_HEIGHT, 8), poleMat);
+  pole.position.set(x, POLE_HEIGHT / 2, z);
+  pole.castShadow = true;
+  scene.add(pole);
+
+  const crossarm = new THREE.Mesh(new THREE.BoxGeometry(6.5, 0.3, 0.3), poleMat);
+  crossarm.position.set(x, POLE_HEIGHT - 1.2, z);
+  crossarm.castShadow = true;
+  scene.add(crossarm);
+
+  obstacles.push({ position: new THREE.Vector3(x, 0, z), radius: 0.6, height: POLE_HEIGHT, landable: false });
+  return [
+    new THREE.Vector3(x - 2.6, POLE_HEIGHT - 1.2, z),
+    new THREE.Vector3(x + 2.6, POLE_HEIGHT - 1.2, z),
+  ];
+}
+
+// Keeps the home helipad guaranteed clear — poles are already excluded
+// within this radius, but a *span* between two farther-out poles can still
+// cut across a chord closer to the origin than either endpoint, so spans
+// get their own check before being built.
+const SPAWN_SAFE_RADIUS = 55;
+function segmentNearOriginXZ(ax, az, bx, bz, safeR) {
+  const abx = bx - ax;
+  const abz = bz - az;
+  const lenSq = abx * abx + abz * abz;
+  const t = lenSq > 1e-6 ? THREE.MathUtils.clamp((-ax * abx - az * abz) / lenSq, 0, 1) : 0;
+  const cx = ax + abx * t;
+  const cz = az + abz * t;
+  return Math.hypot(cx, cz) < safeR;
+}
+
+function addCableSpan(pA, pB) {
+  if (segmentNearOriginXZ(pA.x, pA.z, pB.x, pB.z, SPAWN_SAFE_RADIUS)) return;
+  const mid = pA.clone().add(pB).multiplyScalar(0.5);
+  mid.y -= Math.min(2.8, pA.distanceTo(pB) * 0.08);
+  const curve = new THREE.CatmullRomCurve3([pA, mid, pB]);
+  const tube = new THREE.Mesh(new THREE.TubeGeometry(curve, 16, 0.07, 6, false), cableMat);
+  tube.castShadow = true;
+  scene.add(tube);
+  powerLineSpans.push(curve.getPoints(16));
+}
+
+const POWERLINE_CORRIDORS = 3;
+for (let c = 0; c < POWERLINE_CORRIDORS; c++) {
+  const startAngle = randRange(0, Math.PI * 2);
+  let x = Math.cos(startAngle) * randRange(180, 430);
+  let z = Math.sin(startAngle) * randRange(180, 430);
+  const dirAngle = startAngle + Math.PI + randRange(-0.5, 0.5);
+  const spanLen = randRange(45, 62);
+  const poleCount = 5 + Math.floor(Math.random() * 3);
+
+  let prevArm = null;
+  for (let i = 0; i < poleCount; i++) {
+    if (Math.hypot(x, z) < SPAWN_SAFE_RADIUS || Math.abs(x) > GROUND_SIZE / 2 - 10 || Math.abs(z) > GROUND_SIZE / 2 - 10) {
+      x += Math.cos(dirAngle) * spanLen;
+      z += Math.sin(dirAngle) * spanLen;
+      prevArm = null; // don't bridge a cable across the skipped gap
+      continue;
+    }
+    const arm = addPole(x, z);
+    if (prevArm) {
+      addCableSpan(prevArm[0], arm[0]);
+      addCableSpan(prevArm[1], arm[1]);
+    }
+    prevArm = arm;
+    x += Math.cos(dirAngle) * spanLen + randRange(-6, 6);
+    z += Math.sin(dirAngle) * spanLen + randRange(-6, 6);
+  }
 }
 
 // ---------------------------------------------------------------------------
@@ -274,13 +410,6 @@ let gatesPassed = 0;
 
 const DRONE_TYPES = {
   exp_play: {
-    label: "EXP PLAY",
-    category: "Recreativo / Audiovisual",
-    emoji: "🛸",
-    description: "Compacto y ágil, ideal para vuelos recreativos",
-    image: "assets/aircraft-exp-play.jpg",
-    specs: ["Compacto y portátil", "Cámara 4K estabilizada", "Ideal para contenido y vuelos recreativos"],
-    weightLabel: "< 900 g",
     flightMinutes: 40,
     rangeKm: 12,
     bodyColor: 0x8fd400,
@@ -295,13 +424,6 @@ const DRONE_TYPES = {
     rateResponse: 7.5,
   },
   inspector_pro: {
-    label: "INSPECTOR PRO",
-    category: "Inspección / Televigilancia",
-    emoji: "🛰️",
-    description: "Preciso y estable, para trabajo profesional",
-    image: "assets/aircraft-inspector-pro.jpg",
-    specs: ["Cámara zoom y térmica", "Sensor láser y visión nocturna", "Resistente a condiciones exigentes"],
-    weightLabel: "3.7 kg",
     flightMinutes: 50,
     rangeKm: 15,
     bodyColor: 0x2b2f36,
@@ -316,13 +438,6 @@ const DRONE_TYPES = {
     rateResponse: 9.0,
   },
   agri_spray: {
-    label: "AGRI SPRAY X8",
-    category: "Agrícola / Aspersión",
-    emoji: "🌾",
-    description: "Pesado y estable, para grandes cargas",
-    image: "assets/aircraft-agri-spray.jpg",
-    specs: ["Tanque de 20 litros", "Sistema de aspersión de alta precisión", "Cobertura eficiente de grandes áreas"],
-    weightLabel: "30 kg",
     flightMinutes: 25,
     rangeKm: 5,
     bodyColor: 0xe8ebee,
@@ -341,9 +456,20 @@ const DRONE_TYPES = {
 function buildDrone(config) {
   const group = new THREE.Group();
 
-  const bodyMat = new THREE.MeshStandardMaterial({ color: config.bodyColor, roughness: 0.4, metalness: 0.4 });
-  const armMat = new THREE.MeshStandardMaterial({ color: config.armColor, roughness: 0.5, metalness: 0.3 });
+  // Painted-plastic body with a subtle clearcoat, like an injection-molded
+  // consumer airframe rather than a flat-shaded placeholder.
+  const bodyMat = new THREE.MeshPhysicalMaterial({
+    color: config.bodyColor,
+    roughness: 0.35,
+    metalness: 0.35,
+    clearcoat: 0.6,
+    clearcoatRoughness: 0.2,
+  });
+  const armMat = new THREE.MeshStandardMaterial({ color: config.armColor, roughness: 0.5, metalness: 0.35 });
+  const motorMat = new THREE.MeshStandardMaterial({ color: 0x2a2d33, roughness: 0.3, metalness: 0.8 });
   const propMat = new THREE.MeshStandardMaterial({ color: 0x111318, roughness: 0.3, metalness: 0.2 });
+  const discMat = new THREE.MeshBasicMaterial({ color: 0x9aa4ad, transparent: true, opacity: 0, side: THREE.DoubleSide });
+  const lensMat = new THREE.MeshPhysicalMaterial({ color: 0x0a0c10, roughness: 0.08, metalness: 0.9, clearcoat: 1 });
   const ledMat = new THREE.MeshStandardMaterial({ color: 0xff3355, emissive: 0xff2244, emissiveIntensity: 1.5 });
   const ledFrontMat = new THREE.MeshStandardMaterial({
     color: config.accentColor,
@@ -355,9 +481,22 @@ function buildDrone(config) {
   body.castShadow = true;
   group.add(body);
 
-  const dome = new THREE.Mesh(new THREE.SphereGeometry(0.28, 12, 8), bodyMat);
-  dome.position.set(0, 0.16, 0.35);
-  group.add(dome);
+  // Nose gimbal: a small rotary housing (rounded body) plus a distinct
+  // forward-facing lens barrel — reads as a real 3-axis camera mount
+  // instead of a plain sphere.
+  const gimbalHousing = new THREE.Mesh(new THREE.SphereGeometry(0.22, 12, 10), bodyMat);
+  gimbalHousing.position.set(0, 0.1, 0.42);
+  gimbalHousing.castShadow = true;
+  group.add(gimbalHousing);
+
+  const lensBarrel = new THREE.Mesh(new THREE.CylinderGeometry(0.1, 0.11, 0.16, 12), motorMat);
+  lensBarrel.rotation.x = Math.PI / 2;
+  lensBarrel.position.set(0, 0.1, 0.56);
+  group.add(lensBarrel);
+
+  const lensGlass = new THREE.Mesh(new THREE.CircleGeometry(0.085, 12), lensMat);
+  lensGlass.position.set(0, 0.1, 0.645);
+  group.add(lensGlass);
 
   const armOffsets = [
     { x: 0.7, z: 0.7, front: true },
@@ -370,14 +509,19 @@ function buildDrone(config) {
 
   armOffsets.forEach(({ x, z, front }) => {
     const armLen = Math.hypot(x, z);
-    const arm = new THREE.Mesh(new THREE.BoxGeometry(0.12, 0.08, armLen), armMat);
+    // Tapered arm (wide at the body, narrow at the motor) reads as a
+    // manufactured part instead of a uniform box extrusion. The cylinder's
+    // default axis is Y, so its quaternion is set directly from that axis
+    // to the horizontal (x,0,z) direction rather than juggling Euler order.
+    const arm = new THREE.Mesh(new THREE.CylinderGeometry(0.045, 0.075, armLen, 6), armMat);
+    arm.quaternion.setFromUnitVectors(new THREE.Vector3(0, 1, 0), new THREE.Vector3(x, 0, z).normalize());
     arm.position.set(x / 2, 0, z / 2);
-    arm.rotation.y = Math.atan2(x, z);
     arm.castShadow = true;
     group.add(arm);
 
-    const motor = new THREE.Mesh(new THREE.CylinderGeometry(0.12, 0.14, 0.18, 10), bodyMat);
-    motor.position.set(x, 0.05, z);
+    const motor = new THREE.Mesh(new THREE.CylinderGeometry(0.12, 0.15, 0.2, 12), motorMat);
+    motor.position.set(x, 0.06, z);
+    motor.castShadow = true;
     group.add(motor);
 
     const led = new THREE.Mesh(new THREE.SphereGeometry(0.05, 6, 6), front ? ledFrontMat : ledMat);
@@ -385,12 +529,21 @@ function buildDrone(config) {
     group.add(led);
 
     const propGroup = new THREE.Group();
-    propGroup.position.set(x, 0.15, z);
+    propGroup.position.set(x, 0.17, z);
     const blade = new THREE.Mesh(new THREE.BoxGeometry(0.9, 0.02, 0.08), propMat);
     blade.castShadow = true;
     const blade2 = blade.clone();
     blade2.rotation.y = Math.PI / 2;
     propGroup.add(blade, blade2);
+
+    // Faint spin-blur disc, hidden at rest and faded in at high RPM by
+    // updatePhysics — cheap (one extra basic-material draw per rotor) and
+    // avoids a plain naked-blade look once the propellers are spinning fast.
+    const disc = new THREE.Mesh(new THREE.CircleGeometry(0.46, 20), discMat);
+    disc.rotation.x = -Math.PI / 2;
+    propGroup.add(disc);
+    propGroup.userData.disc = disc;
+
     group.add(propGroup);
     propellers.push(propGroup);
   });
@@ -446,13 +599,11 @@ function cycleCamera() {
 }
 
 // Touch controls: virtual joysticks (left = throttle/yaw, right = pitch/roll)
-// plus buttons for camera, auto-level, boost and reset. Shown automatically
-// on touch-capable devices (see isTouchDevice below).
+// plus buttons for camera and reset. Shown automatically on touch-capable
+// devices (see isTouchDevice below).
 const isTouchDevice = "ontouchstart" in window || navigator.maxTouchPoints > 0;
 if (isTouchDevice) {
   document.body.classList.add("touch-device");
-  document.getElementById("start-keyboard-list").classList.add("hidden");
-  document.getElementById("start-touch-list").classList.remove("hidden");
 }
 
 const touch = { throttle: 0, yaw: 0, pitch: 0, roll: 0, boost: false, level: false };
@@ -532,32 +683,6 @@ setupJoystick(document.getElementById("joystick-right"), document.querySelector(
   touch.pitch = y;
 });
 
-function bindHoldButton(id, onDown, onUp) {
-  const el = document.getElementById(id);
-  el.addEventListener("pointerdown", (e) => {
-    e.preventDefault();
-    el.classList.add("active");
-    onDown();
-  });
-  const release = () => {
-    el.classList.remove("active");
-    onUp();
-  };
-  el.addEventListener("pointerup", release);
-  el.addEventListener("pointercancel", release);
-  el.addEventListener("pointerleave", release);
-}
-
-bindHoldButton(
-  "btn-boost",
-  () => (touch.boost = true),
-  () => (touch.boost = false)
-);
-bindHoldButton(
-  "btn-level",
-  () => (touch.level = true),
-  () => (touch.level = false)
-);
 document.getElementById("btn-camera").addEventListener("pointerdown", (e) => {
   e.preventDefault();
   if (started) cycleCamera();
@@ -567,15 +692,30 @@ document.getElementById("btn-reset").addEventListener("pointerdown", (e) => {
   if (started) resetDrone();
 });
 
-// Aircraft picker on the preflight "Selecciona tu aeronave" step — pick a
-// model, see it swap live in the preview behind the menu, then take off
-// with whichever was last selected.
-const aircraftOptionEls = document.querySelectorAll(".aircraft-option");
-aircraftOptionEls.forEach((el) => {
+// Toast — brief informational message, reused for the locked-aircraft notice.
+const LOCK_ICON_SVG =
+  '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="5" y="11" width="14" height="9" rx="2" /><path d="M8 11V7a4 4 0 0 1 8 0v4" /></svg>';
+let toastTimer = null;
+function showToast(message, { icon = false } = {}) {
+  const el = document.getElementById("toast");
+  el.innerHTML = icon ? `${LOCK_ICON_SVG}<span>${message}</span>` : message;
+  el.classList.remove("hidden");
+  clearTimeout(toastTimer);
+  toastTimer = setTimeout(() => el.classList.add("hidden"), 2500);
+}
+
+// Aircraft picker on the preflight "Selecciona tu aeronave" step — trial
+// version only unlocks EXP PLAY; Inspector Pro / Agri Spray X8 are locked
+// hit-zones that show an informational toast instead of changing the
+// selection (selectedDroneKey defaults to exp_play and is the only one
+// that can ever launch in this build).
+document.querySelectorAll(".aircraft-hit-zone").forEach((el) => {
   el.addEventListener("pointerdown", (e) => {
     e.preventDefault();
-    aircraftOptionEls.forEach((o) => o.classList.remove("selected"));
-    el.classList.add("selected");
+    if (el.classList.contains("aircraft-locked")) {
+      showToast("Disponible en la versión completa", { icon: true });
+      return;
+    }
     selectedDroneKey = el.dataset.drone;
     droneConfig = DRONE_TYPES[selectedDroneKey];
     applyDroneType();
@@ -594,6 +734,34 @@ function showPreflightStep(id) {
   });
 }
 
+// Each preflight screen is the official 2D artwork shown at its native
+// aspect ratio ("contain" letterboxing), computed here in px rather than
+// pure CSS: a non-replaced box can't resolve `aspect-ratio` against both
+// axes of available space at once, and every overlay button below is
+// positioned in percentages that must line up with the artwork's own
+// drawn buttons, so the frame's rendered box has to exactly match the
+// image's ratio — not just its visible background content.
+const screenFrames = document.querySelectorAll(".screen-frame");
+function sizeScreenFrames() {
+  const vw = window.innerWidth;
+  const vh = window.innerHeight;
+  screenFrames.forEach((el) => {
+    const ratio = Number(el.dataset.ratio);
+    if (!ratio) return;
+    let w = vw;
+    let h = w / ratio;
+    if (h > vh) {
+      h = vh;
+      w = h * ratio;
+    }
+    el.style.width = `${w}px`;
+    el.style.height = `${h}px`;
+  });
+}
+sizeScreenFrames();
+window.addEventListener("resize", sizeScreenFrames);
+window.addEventListener("orientationchange", sizeScreenFrames);
+
 document.getElementById("welcome-next-btn").addEventListener("pointerdown", (e) => {
   e.preventDefault();
   showPreflightStep("step-aircraft");
@@ -602,7 +770,7 @@ document.getElementById("aircraft-next-btn").addEventListener("pointerdown", (e)
   e.preventDefault();
   showPreflightStep("step-safety");
 });
-document.querySelectorAll(".preflight-btn-back").forEach((el) => {
+document.querySelectorAll("[data-back-to]").forEach((el) => {
   el.addEventListener("pointerdown", (e) => {
     e.preventDefault();
     showPreflightStep(el.dataset.backTo);
@@ -917,6 +1085,18 @@ function updatePhysics(dt) {
     }
   }
 
+  // Power-line cable collision: each span is a sampled polyline, tested as
+  // a chain of segments — any point closer than the hit radius crashes the
+  // flight the same way a tree does (no landable surface).
+  outer: for (const span of powerLineSpans) {
+    for (let i = 0; i < span.length - 1; i++) {
+      if (distPointToSegment(state.position, span[i], span[i + 1]) < POWERLINE_HIT_RADIUS + DRONE_RADIUS) {
+        triggerCrash();
+        break outer;
+      }
+    }
+  }
+
   drone.position.copy(state.position);
   drone.quaternion.copy(state.quaternion);
 
@@ -925,6 +1105,7 @@ function updatePhysics(dt) {
   const spinSpeed = 4 + liftDemand * 40;
   propellers.forEach((p, i) => {
     p.rotation.y += spinSpeed * dt * (i % 2 === 0 ? 1 : -1);
+    if (p.userData.disc) p.userData.disc.material.opacity = THREE.MathUtils.clamp((spinSpeed - 10) / 30, 0, 0.35);
   });
 }
 
@@ -964,20 +1145,24 @@ let cinematicLookInit = false;
 
 // FPV gimbal tilt — purely a camera-look adjustment layered on top of the
 // drone's own orientation; it never touches state.pitch/roll/yaw. Range
-// matches a real gimbal dial: -90° (straight down) to +30° (up), and it
-// holds wherever it's left, no spring-back.
-const GIMBAL_MIN = THREE.MathUtils.degToRad(-90);
-const GIMBAL_MAX = THREE.MathUtils.degToRad(30);
+// matches a real DJI gimbal dial: 0° (horizonte) to 90° (cenital/nadir,
+// straight down) — pushing the slider up moves toward the horizon,
+// pushing it down moves toward nadir — and it holds wherever it's left,
+// no spring-back.
+const GIMBAL_MIN = THREE.MathUtils.degToRad(0);
+const GIMBAL_MAX = THREE.MathUtils.degToRad(90);
 const GIMBAL_KEY_RATE = THREE.MathUtils.degToRad(60); // deg/sec via [ and ]
 let gimbalPitch = 0;
 
 const gimbalTrackEl = document.getElementById("gimbal-track");
 const gimbalKnobEl = document.getElementById("gimbal-knob");
+const gimbalAngleEl = document.getElementById("gimbal-angle");
 
 function setGimbalPitch(rad) {
   gimbalPitch = THREE.MathUtils.clamp(rad, GIMBAL_MIN, GIMBAL_MAX);
   const frac = (gimbalPitch - GIMBAL_MIN) / (GIMBAL_MAX - GIMBAL_MIN);
-  gimbalKnobEl.style.top = `${(1 - frac) * 100}%`;
+  gimbalKnobEl.style.top = `${frac * 100}%`;
+  if (gimbalAngleEl) gimbalAngleEl.textContent = `${Math.round(THREE.MathUtils.radToDeg(gimbalPitch))}°`;
 }
 setGimbalPitch(gimbalPitch);
 
@@ -987,7 +1172,7 @@ setGimbalPitch(gimbalPitch);
 
   function fromClientY(clientY) {
     const rect = gimbalTrackEl.getBoundingClientRect();
-    const frac = THREE.MathUtils.clamp(1 - (clientY - rect.top) / rect.height, 0, 1);
+    const frac = THREE.MathUtils.clamp((clientY - rect.top) / rect.height, 0, 1);
     setGimbalPitch(GIMBAL_MIN + frac * (GIMBAL_MAX - GIMBAL_MIN));
   }
 
@@ -1052,6 +1237,11 @@ function applyCameraLook(camPos, lookTarget, upVec, dt) {
 function updateCamera(dt) {
   _fwd.set(0, 0, 1).applyQuaternion(state.quaternion);
   _up.set(0, 1, 0).applyQuaternion(state.quaternion);
+
+  // FPV is mounted on the aircraft's own nose, so its own body/arms/props
+  // would otherwise fill the frame — hide the drone mesh only in that mode,
+  // never touching visibility for the 3rd-person camera modes.
+  drone.visible = cameraMode !== 1;
 
   if (cameraMode === 1) {
     if (keys.has("BracketRight")) setGimbalPitch(gimbalPitch + GIMBAL_KEY_RATE * dt);
@@ -1122,6 +1312,7 @@ function updateCamera(dt) {
 const hudAlt = document.getElementById("hud-alt");
 const hudSpeed = document.getElementById("hud-speed");
 const hudBattery = document.getElementById("hud-battery");
+const hudBatteryFill = document.getElementById("hud-battery-fill");
 const hudRange = document.getElementById("hud-range");
 
 // Attitude/heading instrument — a small flight-instrument-style readout
@@ -1273,7 +1464,10 @@ function updateHud() {
 
   const batteryMin = Math.floor(batterySecondsLeft / 60);
   const batterySec = Math.floor(batterySecondsLeft % 60);
-  hudBattery.textContent = `${String(batteryMin).padStart(2, "0")}:${String(batterySec).padStart(2, "0")}`;
+  const batteryPct = Math.round((batterySecondsLeft / (droneConfig.flightMinutes * 60)) * 100);
+  hudBattery.textContent = `${batteryPct}% · ${String(batteryMin).padStart(2, "0")}:${String(batterySec).padStart(2, "0")}`;
+  hudBatteryFill.setAttribute("height", (6 * batteryPct) / 100);
+  hudBatteryFill.setAttribute("y", 9 + 6 * (1 - batteryPct / 100));
   hudRange.textContent = `${rangeKmLeft.toFixed(1)} km`;
 
   _fwd.set(0, 0, 1).applyQuaternion(state.quaternion);
