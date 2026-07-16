@@ -87,7 +87,7 @@
 
       <div id="preflight">
         <!-- Step 1: Bienvenida — imagen 2D completa + botones funcionales superpuestos. -->
-        <div id="step-welcome" class="preflight-step">
+        <div id="step-welcome" class="preflight-step" style="--bg-image: url('assets/screen-welcome.jpg')">
           <div class="screen-frame" data-ratio="1.77778" style="background-image: url('assets/screen-welcome.jpg')">
             <button id="tutorial-btn" type="button" class="screen-btn screen-btn-ghost" style="left:41%; top:16.5%; width:28%; height:7%">
               <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="2" y="6" width="20" height="12" rx="3" /><path d="M6 12h4M8 10v4" /><circle cx="16" cy="10.5" r="1" fill="currentColor" stroke="none" /><circle cx="18.5" cy="13" r="1" fill="currentColor" stroke="none" /></svg>
@@ -101,7 +101,7 @@
         </div>
 
         <!-- Step 2: Selecciona tu aeronave — imagen 2D completa + overlays dinámicos solo sobre las 3 tarjetas. -->
-        <div id="step-aircraft" class="preflight-step hidden">
+        <div id="step-aircraft" class="preflight-step hidden" style="--bg-image: url('assets/screen-aircraft.jpg')">
           <div class="screen-frame" data-ratio="1.5" style="background-image: url('assets/screen-aircraft.jpg')">
             <button type="button" class="aircraft-hit-zone" data-drone="exp_play" style="left:4.6%; top:27.3%; width:20.5%; height:56.6%" aria-label="EXP PLAY"></button>
 
@@ -127,7 +127,7 @@
         </div>
 
         <!-- Step 3: Consejos de seguridad — imagen 2D completa + botones funcionales superpuestos. -->
-        <div id="step-safety" class="preflight-step hidden">
+        <div id="step-safety" class="preflight-step hidden" style="--bg-image: url('assets/screen-safety.jpg')">
           <div class="screen-frame" data-ratio="1.77778" style="background-image: url('assets/screen-safety.jpg')">
             <button class="screen-btn screen-btn-ghost" data-back-to="step-aircraft" type="button" style="left:2.2%; top:88.9%; width:12.2%; height:7.2%">
               <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polyline points="15 6 9 12 15 18" /></svg>

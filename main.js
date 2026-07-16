@@ -808,6 +808,16 @@ exitFullscreenBtn.addEventListener("pointerdown", (e) => {
   if (document.fullscreenElement) document.exitFullscreen();
 });
 
+// Browsers only allow requestFullscreen() inside a user gesture, so it
+// can't fire on page load — instead it fires on the very first tap/click
+// of any kind, whichever button that happens to be, rather than waiting
+// for the last preflight screen.
+function enterFullscreenOnce() {
+  document.removeEventListener("pointerdown", enterFullscreenOnce);
+  enterFullscreen();
+}
+document.addEventListener("pointerdown", enterFullscreenOnce, { once: true });
+
 document.getElementById("start-btn").addEventListener("pointerdown", (e) => {
   e.preventDefault();
   enterFullscreen();

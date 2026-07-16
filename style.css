@@ -361,6 +361,26 @@ body.touch-device #touch-controls {
   position: relative;
   width: 100%;
   height: 100%;
+  overflow: hidden;
+}
+
+/* Fill-behind: no device aspect ratio matches the artwork exactly, so the
+   letterboxed frame below never reaches every edge. Instead of leaving
+   that space black, a blurred/darkened cover-fit copy of the same image
+   fills it — same trick Spotify/Apple TV use for mismatched media. Purely
+   decorative and behind the sharp frame, so it never touches what's
+   actually shown or how the buttons are aligned. */
+.preflight-step::before {
+  content: "";
+  position: absolute;
+  inset: 0;
+  background-image: var(--bg-image);
+  background-repeat: no-repeat;
+  background-position: center;
+  background-size: cover;
+  filter: blur(40px) brightness(0.55) saturate(1.1);
+  transform: scale(1.15);
+  z-index: 0;
 }
 
 /* Width/height are set in px by sizeScreenFrames() in main.js, computed
@@ -373,6 +393,7 @@ body.touch-device #touch-controls {
   margin: auto;
   max-width: 100%;
   max-height: 100%;
+  z-index: 1;
   background-repeat: no-repeat;
   background-position: center;
   background-size: 100% 100%;
