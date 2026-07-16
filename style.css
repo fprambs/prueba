@@ -1,3 +1,28 @@
+/* Self-hosted Ubuntu (Ubuntu Font License, freely redistributable) — Latin
+   subset only (covers Spanish diacritics: á é í ó ú ñ ¿ ¡), served locally
+   instead of Google Fonts so the app has no external network dependency. */
+@font-face {
+  font-family: "Ubuntu";
+  font-style: normal;
+  font-weight: 400;
+  font-display: swap;
+  src: url("assets/fonts/ubuntu-400.woff2") format("woff2");
+}
+@font-face {
+  font-family: "Ubuntu";
+  font-style: normal;
+  font-weight: 500;
+  font-display: swap;
+  src: url("assets/fonts/ubuntu-500.woff2") format("woff2");
+}
+@font-face {
+  font-family: "Ubuntu";
+  font-style: normal;
+  font-weight: 700;
+  font-display: swap;
+  src: url("assets/fonts/ubuntu-700.woff2") format("woff2");
+}
+
 * {
   box-sizing: border-box;
 }
